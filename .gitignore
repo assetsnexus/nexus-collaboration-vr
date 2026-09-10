@@ -10,8 +10,12 @@ packages/*/dist
 # Local / licensed character meshes — fetch sample.vrm (see README). Do not commit private models.
 *.vrm
 *.vroid
-*.png
 *.jpg
 *.jpeg
 *.gif
 *.webp
+*.png
+!docs/screenshots/*.png
+/local/*
+!/local/README.md
+apps/playground/public/local/

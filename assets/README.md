@@ -14,7 +14,7 @@ Optional extra filenames the catalog will pick up if present: `optional-face`, `
 
 `.glb` files that contain a `VRM` / `VRMC_vrm` glTF extension **are** VRM — rename to `.vrm`. Plain GLB without that extension will not load as a companion.
 
-Community catalogs (check licenses): [VRoid Hub](https://hub.vroid.com/), [VRoid Studio](https://vroid.com/en/studio), [vrm.dev](https://vrm.dev/en/), [Ready Player Me](https://readyplayer.me/), [BOOTH](https://booth.pm/). See [oc-controller/frontend/README.md](../../oc-controller/frontend/README.md#where-to-get-vrm-models).
+Community catalogs (check licenses): see the [package README](../README.md#where-to-get-vrm-models).
 
 ## Clothes
 

@@ -1,6 +1,6 @@
 # Staging inbox
 
-Paste VRM / VRM-in-GLB files here only temporarily.
+Paste VRM / VRM-in-GLB files here only temporarily, or keep private files in [`../../local/meshes/`](../../local/README.md) (gitignored).
 
 The playground serves avatars from:
 

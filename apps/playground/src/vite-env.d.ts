@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_OPENROUTER_BASE_URL?: string
   readonly VITE_INLINE_CHARACTER_TAGS?: string
   readonly VITE_DEBUG_CHARACTER_TAGS?: string
+  /** Custom system prompt (do not commit). */
+  readonly VITE_SYSTEM_PROMPT?: string
 }
 
 interface ImportMeta {

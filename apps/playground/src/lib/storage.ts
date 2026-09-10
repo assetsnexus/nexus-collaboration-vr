@@ -1,4 +1,4 @@
-import { envFlag } from './env'
+import { envFlag, envSystemPrompt } from './env'
 import type { ChatMessage } from './hermes'
 import {
   compactClothesTransform,
@@ -178,7 +178,7 @@ export const defaultSettings = (): PlaygroundSettings => ({
   openrouterBaseUrl: 'https://openrouter.ai/api/v1',
   vrmUrl: '/assets/vrm/sample.vrm',
   gestureManifestUrl: '/assets/vrma/manifest.json',
-  systemPrompt: DEFAULT_SYSTEM_PROMPT,
+  systemPrompt: envSystemPrompt(DEFAULT_SYSTEM_PROMPT),
   chatColumnPx: CHAT_COLUMN_DEFAULT_PX,
   pointerLook: true,
   bodyFollowCamera: false,

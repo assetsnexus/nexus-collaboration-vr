@@ -1,8 +1,8 @@
 # Use character-kit + voice-kit in your own UI
 
-These packages are **framework-agnostic**. You own the canvas, chat, and routing. The kits own Three.js, VRM load, gestures, presence, and (optionally) STT/TTS.
+These packages are **free to use (MIT)** and framework-agnostic. You own the canvas, chat, and routing. The kits own Three.js, VRM load, gestures, presence, and (optionally) STT/TTS.
 
-Production consumer in this repo: oc-controller frontend (`CompanionHost` preview, `SceneRoom` group chat). Do not copy playground Vue into a new app.
+The Vue playground and [oc-controller](../../oc-controller/) are **integration examples**. [AssetsNexus.org](https://assetsnexus.org) uses VRM companions as a utilizing platform. Copy the APIs, not a host UI.
 
 ## Which class
 
@@ -17,7 +17,7 @@ Start with `CompanionHost` unless you need a group scene.
 
 ## Install
 
-From a sibling app in this monorepo (same pattern as oc-controller):
+From a host app in the same repo (or any `file:` / published path):
 
 ```json
 {
@@ -282,4 +282,4 @@ Always `dispose()` or you leak WebGL contexts.
 3. CORS if the mesh is on another origin  
 4. License: each VRM has embedded usage terms; VRMA pack is MIT / CC BY — see playground `LICENSE-ASSETS.md`
 
-Where to download meshes: [oc-controller frontend README](../../oc-controller/frontend/README.md#where-to-get-vrm-models).
+Where to download meshes: [README — Where to get VRM models](../README.md#where-to-get-vrm-models).
