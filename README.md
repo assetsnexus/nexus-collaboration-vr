@@ -12,6 +12,18 @@ License: **[MIT](LICENSE)** (VRMA clips under `apps/playground/public/assets/vrm
 
 **oc-controller** is a small [integration example](../oc-controller/) (private agent-fleet cockpit). **[AssetsNexus.org](https://assetsnexus.org)** is a utilizing platform (Nexus Agents). The kits do not require either UI.
 
+## Out of scope here
+
+These kits add **characters, objects, and robots** into *your* Three.js scene (meters, right-handed; optional IFC-axis helpers). They are not a building or field product.
+
+Managed on **[AssetsNexus.org](https://assetsnexus.org)** (not in this repo):
+
+- BIM / IFC building and location models
+- Wiring, cables, MEP
+- Industrial robot drivers (URDF live control, ROS, MQTT)
+- In-browser VR / AR (Nexus already has this)
+- Server-authoritative shared scenes, WebRTC P2P hosts
+
 ## Use in your app
 
 **[docs/library-in-your-ui.md](docs/library-in-your-ui.md)** — `CompanionHost` (one canvas), `SceneRoom` (many avatars), LLM tools, Fish TTS + lip-sync.

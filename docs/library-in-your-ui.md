@@ -4,6 +4,18 @@ These packages are **free to use (MIT)** and framework-agnostic. You own the can
 
 The Vue playground and [oc-controller](../../oc-controller/) are **integration examples**. [AssetsNexus.org](https://assetsnexus.org) uses VRM companions as a utilizing platform. Copy the APIs, not a host UI.
 
+## Out of scope here
+
+These kits add **characters, objects, and robots** into *your* Three.js scene (meters, right-handed; optional IFC-axis helpers). They are not a building or field product.
+
+Managed on **[AssetsNexus.org](https://assetsnexus.org)** (not in this repo):
+
+- BIM / IFC building and location models
+- Wiring, cables, MEP
+- Industrial robot drivers (URDF live control, ROS, MQTT)
+- In-browser VR / AR (Nexus already has this)
+- Server-authoritative shared scenes, WebRTC P2P hosts
+
 ## Which class
 
 | Need | Class | Package |
