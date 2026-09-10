@@ -1,4 +1,4 @@
-import { CHARACTER_SKILL, type ChatCompletionTool } from '@openclaw/character-kit'
+import { CHARACTER_SKILL, type ChatCompletionTool } from '@nexus/character-kit'
 import { chatCompletionsUrl, healthUrl, isChatAbortError, playgroundFetchBase, withChatTimeout } from './llm-endpoint'
 
 export interface HermesConfig {

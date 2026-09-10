@@ -1,5 +1,5 @@
 {
-  "name": "@openclaw/character-kit",
+  "name": "@nexus/character-kit",
   "version": "0.1.0",
   "description": "Framework-agnostic VRM character controller with emotions, VRMA gestures, lip-sync, and OpenAI tool schemas",
   "type": "module",

@@ -75,7 +75,7 @@ import {
   groupClothesByCategory,
   type InlineTagCatalog,
   type PresenceMoodDef,
-} from '@openclaw/character-kit'
+} from '@nexus/character-kit'
 import {
   BrowserWhisperStt,
   SpeachesStt,
@@ -86,7 +86,7 @@ import {
   type SttProvider,
   type VadFrameInfo,
   type VadSession,
-} from '@openclaw/voice-kit'
+} from '@nexus/voice-kit'
 import { readAnalyserRms, speechEnergy } from './lib/audio-meter'
 import {
   chromeAfterFullscreenChange,

@@ -12,10 +12,10 @@ Inbound aliases (do not advertise; client still accepts them):
 - `character.play_gesture` (dotted)
 - short names: `play_gesture`, `set_mood`, …
 
-Copy this folder into an OpenClaw workspace `skills/character/`, or import from `@openclaw/character-kit`:
+Copy this folder into an OpenClaw workspace `skills/character/`, or import from `@nexus/character-kit`:
 
 ```ts
-import { CHARACTER_SKILL, parseInlineTags } from '@openclaw/character-kit'
+import { CHARACTER_SKILL, parseInlineTags } from '@nexus/character-kit'
 
 const tools = CHARACTER_SKILL.tools // OpenAI ChatCompletionTool[]
 CHARACTER_SKILL.resolveToolName('character.play_gesture') // → character_play_gesture

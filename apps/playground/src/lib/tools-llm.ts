@@ -1,7 +1,7 @@
 import {
   CHARACTER_SKILL,
   type ChatCompletionTool,
-} from '@openclaw/character-kit'
+} from '@nexus/character-kit'
 import type { ChatCompletionResponse, ChatMessage, HermesConfig } from './hermes'
 import { HermesFetchError, hermesTrustUrl } from './hermes'
 import { isChatAbortError, playgroundFetchBase, withChatTimeout } from './llm-endpoint'

@@ -22,15 +22,15 @@ Doc index: [docs/README.md](docs/README.md). Agent skill text: [packages/charact
 
 | Path | Name | Role |
 |------|------|------|
-| `packages/character-kit` | `@openclaw/character-kit` | three + three-vrm + VRMA + lip-sync; OpenAI `character_*` tool schemas |
-| `packages/voice-kit` | `@openclaw/voice-kit` | Silero VAD, browser Whisper, Speaches STT, Fish TTS |
-| `apps/playground` | `@openclaw/vrm-playground` | Vue reference app (not required at runtime) |
+| `packages/character-kit` | `@nexus/character-kit` | three + three-vrm + VRMA + lip-sync; OpenAI `character_*` tool schemas |
+| `packages/voice-kit` | `@nexus/voice-kit` | Silero VAD, browser Whisper, Speaches STT, Fish TTS |
+| `apps/playground` | `@nexus/vrm-playground` | Vue reference app (not required at runtime) |
 
 ```json
 {
   "dependencies": {
-    "@openclaw/character-kit": "file:../path/to/dev-vrm/packages/character-kit",
-    "@openclaw/voice-kit": "file:../path/to/dev-vrm/packages/voice-kit",
+    "@nexus/character-kit": "file:../path/to/dev-vrm/packages/character-kit",
+    "@nexus/voice-kit": "file:../path/to/dev-vrm/packages/voice-kit",
     "three": "^0.180.0"
   }
 }

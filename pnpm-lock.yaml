@@ -10,10 +10,10 @@ importers:
 
   apps/playground:
     dependencies:
-      '@openclaw/character-kit':
+      '@nexus/character-kit':
         specifier: workspace:*
         version: link:../../packages/character-kit
-      '@openclaw/voice-kit':
+      '@nexus/voice-kit':
         specifier: workspace:*
         version: link:../../packages/voice-kit
       three:

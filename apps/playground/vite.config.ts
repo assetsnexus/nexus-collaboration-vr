@@ -9,10 +9,10 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      '@openclaw/character-kit': fileURLToPath(
+      '@nexus/character-kit': fileURLToPath(
         new URL('../../packages/character-kit/src/index.ts', import.meta.url),
       ),
-      '@openclaw/voice-kit': fileURLToPath(
+      '@nexus/voice-kit': fileURLToPath(
         new URL('../../packages/voice-kit/src/index.ts', import.meta.url),
       ),
     },

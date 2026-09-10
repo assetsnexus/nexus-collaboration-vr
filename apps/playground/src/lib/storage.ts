@@ -7,7 +7,7 @@ import {
   normalizeClothesTransform,
   type ClothesPieceTransform,
   type PresenceMoodId,
-} from '@openclaw/character-kit'
+} from '@nexus/character-kit'
 import { CHAT_COLUMN_DEFAULT_PX, CHAT_COLUMN_MIN_PX } from './split-resize'
 import { DEFAULT_CHAT_MODEL, migrateChatModel } from './openrouter-models'
 import { catalogIdFromUrl } from './demo-mode'

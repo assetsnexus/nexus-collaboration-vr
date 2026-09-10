@@ -1,4 +1,4 @@
-import type { CharacterController } from '@openclaw/character-kit'
+import type { CharacterController } from '@nexus/character-kit'
 
 export interface CharacterDirective {
   emotion?: string

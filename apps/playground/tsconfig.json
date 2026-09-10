@@ -6,8 +6,8 @@
     "types": ["vite/client"],
     "noEmit": true,
     "paths": {
-      "@openclaw/character-kit": ["../../packages/character-kit/src/index.ts"],
-      "@openclaw/voice-kit": ["../../packages/voice-kit/src/index.ts"]
+      "@nexus/character-kit": ["../../packages/character-kit/src/index.ts"],
+      "@nexus/voice-kit": ["../../packages/voice-kit/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],

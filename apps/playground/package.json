@@ -1,5 +1,5 @@
 {
-  "name": "@openclaw/vrm-playground",
+  "name": "@nexus/vrm-playground",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
     "test": "node --experimental-strip-types --test src/lib/wardrobe.test.ts src/lib/audio-meter.test.ts src/lib/ptt.test.ts src/lib/immersive.test.ts src/lib/agent-export.test.ts src/lib/ack-target.test.ts src/lib/agent-identity.test.ts src/lib/llm-endpoint.test.ts src/lib/avatar-snapshot.test.ts src/lib/id.test.ts"
   },
   "dependencies": {
-    "@openclaw/character-kit": "workspace:*",
-    "@openclaw/voice-kit": "workspace:*",
+    "@nexus/character-kit": "workspace:*",
+    "@nexus/voice-kit": "workspace:*",
     "three": "^0.180.0",
     "vue": "^3.5.21"
   },

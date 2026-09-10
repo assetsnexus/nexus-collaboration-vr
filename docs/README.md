@@ -1,6 +1,6 @@
 # docs/
 
-How to embed `@openclaw/character-kit` and `@openclaw/voice-kit` in **your** UI (React, Vue, vanilla). The Vue playground (`apps/playground`) is a reference app, not the library.
+How to embed `@nexus/character-kit` and `@nexus/voice-kit` in **your** UI (React, Vue, vanilla). The Vue playground (`apps/playground`) is a reference app, not the library.
 
 | Doc | Topic |
 |-----|--------|

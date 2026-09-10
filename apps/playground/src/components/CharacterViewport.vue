@@ -11,7 +11,7 @@ import {
   mergeAckGestureOptions,
   type ClothesOverlayPiece,
   type GestureManifest,
-} from '@openclaw/character-kit'
+} from '@nexus/character-kit'
 import MoveStick from './MoveStick.vue'
 import WalkSpeedSlider from './WalkSpeedSlider.vue'
 

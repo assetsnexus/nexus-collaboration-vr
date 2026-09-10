@@ -5,7 +5,7 @@ import {
   type ClothesGroup,
   type ClothesItem,
   type ClothesPieceTransform,
-} from '@openclaw/character-kit'
+} from '@nexus/character-kit'
 import ClothesPieceConfig from './ClothesPieceConfig.vue'
 
 const props = defineProps<{

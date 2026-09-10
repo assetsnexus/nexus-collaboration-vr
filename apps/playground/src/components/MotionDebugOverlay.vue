@@ -4,7 +4,7 @@ import type {
   CharacterActionEvent,
   ExpressionInfo,
   PresenceMoodDef,
-} from '@openclaw/character-kit'
+} from '@nexus/character-kit'
 import MotionActionFeed from './MotionActionFeed.vue'
 
 const props = defineProps<{

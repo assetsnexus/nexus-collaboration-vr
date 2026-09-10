@@ -1,5 +1,5 @@
 {
-  "name": "@openclaw/voice-kit",
+  "name": "@nexus/voice-kit",
   "version": "0.1.0",
   "description": "STT/TTS providers: browser VAD+Whisper, Speaches, Fish Audio, Azure stubs",
   "type": "module",

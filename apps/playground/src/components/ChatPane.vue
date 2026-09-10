@@ -8,7 +8,7 @@ import {
   defaultInlineCatalog,
   parseInlineTags,
   type InlineTagCatalog,
-} from '@openclaw/character-kit'
+} from '@nexus/character-kit'
 import { isNearBottom, scrollToBottom } from '../lib/stick-to-bottom'
 
 const props = defineProps<{

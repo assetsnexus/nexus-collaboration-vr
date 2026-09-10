@@ -4,7 +4,7 @@ import {
   compactClothesTransform,
   normalizeClothesTransform,
   type ClothesPieceTransform,
-} from '@openclaw/character-kit'
+} from '@nexus/character-kit'
 
 const props = defineProps<{
   modelValue?: Partial<ClothesPieceTransform> | null

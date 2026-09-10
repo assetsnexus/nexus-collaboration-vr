@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatActionDelta, type CharacterActionEvent } from '@openclaw/character-kit'
+import { formatActionDelta, type CharacterActionEvent } from '@nexus/character-kit'
 
 defineProps<{
   events: CharacterActionEvent[]

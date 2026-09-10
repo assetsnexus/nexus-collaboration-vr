@@ -1,4 +1,4 @@
-# @openclaw/voice-kit
+# @nexus/voice-kit
 
 Browser voice helpers: Silero VAD, Whisper (Transformers.js), Speaches STT, Fish Audio TTS, Azure stub.
 
@@ -7,6 +7,6 @@ License: [MIT](../../LICENSE). **Pair with a 3D canvas:** [../../docs/library-in
 Keep API keys in the host app — this package does not persist secrets.
 
 ```ts
-import { FishTts, SpeachesStt, createSileroVadSession } from '@openclaw/voice-kit'
-import { StreamingPcmPlayer, FISH_PCM_SAMPLE_RATE } from '@openclaw/voice-kit/pcm-player'
+import { FishTts, SpeachesStt, createSileroVadSession } from '@nexus/voice-kit'
+import { StreamingPcmPlayer, FISH_PCM_SAMPLE_RATE } from '@nexus/voice-kit/pcm-player'
 ```

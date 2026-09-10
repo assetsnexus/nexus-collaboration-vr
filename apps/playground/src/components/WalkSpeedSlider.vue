@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { LOCO_SPEED_MAX, LOCO_SPEED_MIN, LOCO_WALK_SPEED, gaitFromSpeed } from '@openclaw/character-kit'
+import { LOCO_SPEED_MAX, LOCO_SPEED_MIN, LOCO_WALK_SPEED, gaitFromSpeed } from '@nexus/character-kit'
 
 const props = withDefaults(
   defineProps<{

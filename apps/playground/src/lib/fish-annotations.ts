@@ -1,4 +1,4 @@
-import { buildCharacterSkillPrompt, type CharacterSkillCatalog } from '@openclaw/character-kit'
+import { buildCharacterSkillPrompt, type CharacterSkillCatalog } from '@nexus/character-kit'
 
 /** Fish Audio S2 inline annotation reference — stays in TTS text, stripped from chat UI. */
 export const FISH_TTS_ANNOTATION_GUIDE = `

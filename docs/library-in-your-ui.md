@@ -8,10 +8,10 @@ The Vue playground and [oc-controller](../../oc-controller/) are **integration e
 
 | Need | Class | Package |
 |------|--------|---------|
-| One avatar in a `<canvas>` | **`CompanionHost`** | `@openclaw/character-kit` |
-| Several avatars, shared camera / lights | **`SceneRoom`** | `@openclaw/character-kit` |
-| Custom renderer / embed into an existing Three scene | **`CharacterController`** + `embed` | `@openclaw/character-kit` |
-| Mic → text, text → audio | **`FishTts`**, **`SpeachesStt`**, **`BrowserWhisperStt`**, **`createSileroVadSession`** | `@openclaw/voice-kit` |
+| One avatar in a `<canvas>` | **`CompanionHost`** | `@nexus/character-kit` |
+| Several avatars, shared camera / lights | **`SceneRoom`** | `@nexus/character-kit` |
+| Custom renderer / embed into an existing Three scene | **`CharacterController`** + `embed` | `@nexus/character-kit` |
+| Mic → text, text → audio | **`FishTts`**, **`SpeachesStt`**, **`BrowserWhisperStt`**, **`createSileroVadSession`** | `@nexus/voice-kit` |
 
 Start with `CompanionHost` unless you need a group scene.
 
@@ -22,8 +22,8 @@ From a host app in the same repo (or any `file:` / published path):
 ```json
 {
   "dependencies": {
-    "@openclaw/character-kit": "file:../../dev-vrm/packages/character-kit",
-    "@openclaw/voice-kit": "file:../../dev-vrm/packages/voice-kit",
+    "@nexus/character-kit": "file:../../dev-vrm/packages/character-kit",
+    "@nexus/voice-kit": "file:../../dev-vrm/packages/voice-kit",
     "three": "^0.180.0"
   }
 }
@@ -38,8 +38,8 @@ import path from "node:path";
 
 resolve: {
   alias: {
-    "@openclaw/character-kit": path.resolve(__dirname, "../dev-vrm/packages/character-kit/src/index.ts"),
-    "@openclaw/voice-kit": path.resolve(__dirname, "../dev-vrm/packages/voice-kit/src"),
+    "@nexus/character-kit": path.resolve(__dirname, "../dev-vrm/packages/character-kit/src/index.ts"),
+    "@nexus/voice-kit": path.resolve(__dirname, "../dev-vrm/packages/voice-kit/src"),
   },
 },
 optimizeDeps: {
@@ -58,7 +58,7 @@ Serve gesture clips (and optional sample meshes) from `apps/playground/public/as
 
 ```tsx
 import { useEffect, useRef } from "react";
-import { CompanionHost } from "@openclaw/character-kit";
+import { CompanionHost } from "@nexus/character-kit";
 
 export function AvatarCanvas({ vrmUrl, gestureManifestUrl }: { vrmUrl: string; gestureManifestUrl?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -144,7 +144,7 @@ Helpers: `preloadCharacterAssets(urls)`, `fetchRewrittenManifest(manifestUrl)`.
 One WebGL renderer, several VRMs, nametags, spawn slots.
 
 ```ts
-import { SceneRoom, type SceneRoomOccupant } from "@openclaw/character-kit";
+import { SceneRoom, type SceneRoomOccupant } from "@nexus/character-kit";
 
 const room = new SceneRoom(canvas, {
   gestureManifestUrl: "/dev-vrm-assets/vrma/manifest.json",
@@ -194,7 +194,7 @@ import {
   buildCharacterSkillPrompt,
   isImmediateCharacterTool,
   isDeferredCharacterTool,
-} from "@openclaw/character-kit";
+} from "@nexus/character-kit";
 
 const tools = CHARACTER_SKILL.allTools();
 const system = buildCharacterSkillPrompt({
@@ -225,7 +225,7 @@ Prefer compact tags in assistant text for simple beats; use tools for sequences 
 ## Inline tags (no tools)
 
 ```ts
-import { parseInlineTags, defaultInlineCatalog, FISH_TTS_TAGS } from "@openclaw/character-kit";
+import { parseInlineTags, defaultInlineCatalog, FISH_TTS_TAGS } from "@nexus/character-kit";
 
 const parsed = parseInlineTags(assistantText, host.inlineTagCatalog());
 // parsed.withSpeech → run during TTS
@@ -240,7 +240,7 @@ Examples: `[nod]`, `[wave|angry=30]`, `[mood:playful]`, `[look:1,0,2]`, `[walk:f
 Keep API keys in **your** backend or env. voice-kit does not persist secrets.
 
 ```ts
-import { FishTts, StreamingPcmPlayer, FISH_PCM_SAMPLE_RATE } from "@openclaw/voice-kit";
+import { FishTts, StreamingPcmPlayer, FISH_PCM_SAMPLE_RATE } from "@nexus/voice-kit";
 
 const ctx = new AudioContext();
 const tts = new FishTts({ apiKey, referenceId: fishVoiceId });
