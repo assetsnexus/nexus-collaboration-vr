@@ -1,0 +1,101 @@
+:root {
+  --bg: #0e1114;
+  --bg-elev: #161b20;
+  --bg-pane: #12171c;
+  --ink: #e8edf2;
+  --muted: #8b97a5;
+  --line: #2a333d;
+  --accent: #c4a35a;
+  --accent-soft: rgba(196, 163, 90, 0.18);
+  --danger: #d4746a;
+  --ok: #6aae8a;
+  --font-body: 'DM Sans', sans-serif;
+  --font-display: 'Instrument Serif', Georgia, serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(196, 163, 90, 0.08), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgba(90, 140, 160, 0.07), transparent 50%),
+    var(--bg);
+}
+
+html.is-chat-split-dragging,
+html.is-chat-split-dragging * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+html.is-chat-split-dragging iframe {
+  pointer-events: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #1a1408;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+input,
+textarea,
+select {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.45rem 0.65rem;
+  width: 100%;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+  letter-spacing: 0.02em;
+}
+
+.field {
+  margin-bottom: 0.75rem;
+}

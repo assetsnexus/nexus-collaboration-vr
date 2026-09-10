@@ -1,0 +1,51 @@
+{
+  "name": "@openclaw/voice-kit",
+  "version": "0.1.0",
+  "description": "STT/TTS providers: browser VAD+Whisper, Speaches, Fish Audio, Azure stubs",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./pcm-player": {
+      "types": "./src/pcm-player.ts",
+      "import": "./src/pcm-player.ts"
+    },
+    "./tts-fish": {
+      "types": "./src/tts-fish.ts",
+      "import": "./src/tts-fish.ts"
+    },
+    "./stt-speaches": {
+      "types": "./src/stt-speaches.ts",
+      "import": "./src/stt-speaches.ts"
+    },
+    "./stt-browser-whisper": {
+      "types": "./src/stt-browser-whisper.ts",
+      "import": "./src/stt-browser-whisper.ts"
+    },
+    "./vad-silero": {
+      "types": "./src/vad-silero.ts",
+      "import": "./src/vad-silero.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "import": "./src/types.ts"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.7.2",
+    "@ricky0123/vad-web": "^0.0.24"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

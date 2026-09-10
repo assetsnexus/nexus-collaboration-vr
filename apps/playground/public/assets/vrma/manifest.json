@@ -1,0 +1,145 @@
+{
+  "gestures": [
+    {
+      "id": "idle",
+      "url": "/assets/vrma/idle.vrma",
+      "loop": true,
+      "description": "Relaxed full-body idle loop (AIRI idle_loop)"
+    },
+    {
+      "id": "talk",
+      "url": "/assets/vrma/talk.vrma",
+      "loop": true,
+      "description": "Speaking / wait sway (ACCAD wait)"
+    },
+    {
+      "id": "wave",
+      "url": "/assets/vrma/wave.vrma",
+      "description": "Right-hand wave"
+    },
+    {
+      "id": "wave_left",
+      "url": "/assets/vrma/wave_left.vrma",
+      "description": "Left-hand wave"
+    },
+    {
+      "id": "wave_both",
+      "url": "/assets/vrma/wave_both.vrma",
+      "description": "Two-handed wave"
+    },
+    {
+      "id": "think",
+      "url": "/assets/vrma/think.vrma",
+      "description": "Thinking pose"
+    },
+    {
+      "id": "sad",
+      "url": "/assets/vrma/sad.vrma",
+      "description": "Sad posture"
+    },
+    {
+      "id": "look_around",
+      "url": "/assets/vrma/look_around.vrma",
+      "description": "Glance around"
+    },
+    {
+      "id": "look_around_turn",
+      "url": "/assets/vrma/look_around_turn.vrma",
+      "description": "Turn / look around (variant)"
+    },
+    {
+      "id": "look_around_sleepy",
+      "url": "/assets/vrma/look_around_sleepy.vrma",
+      "description": "Sleepy glance (look_around variant)"
+    },
+    {
+      "id": "weight_shift",
+      "url": "/assets/vrma/weight_shift.vrma",
+      "description": "Weight shift / sway"
+    },
+    {
+      "id": "weight_shift_sway",
+      "url": "/assets/vrma/weight_shift_sway.vrma",
+      "description": "Sway variant"
+    },
+    {
+      "id": "weight_shift_stand",
+      "url": "/assets/vrma/weight_shift_stand.vrma",
+      "description": "Standing shift (ACCAD stand)"
+    },
+    {
+      "id": "stretch",
+      "url": "/assets/vrma/stretch.vrma",
+      "description": "Body stretch"
+    },
+    {
+      "id": "relax_pose",
+      "url": "/assets/vrma/relax_pose.vrma",
+      "description": "Relaxed pose (stretch variant)"
+    },
+    {
+      "id": "sport",
+      "url": "/assets/vrma/sport.vrma",
+      "description": "Sport / longer stretch"
+    },
+    {
+      "id": "sit",
+      "url": "/assets/vrma/sit.vrma",
+      "loop": true,
+      "description": "Sit down (chair pose) — use for long idle rest"
+    },
+    {
+      "id": "sit_wave",
+      "url": "/assets/vrma/sit_wave.vrma",
+      "description": "Sit and wave"
+    },
+    {
+      "id": "stand_up",
+      "url": "/assets/vrma/stand_up.vrma",
+      "description": "Stand up from sit"
+    },
+    {
+      "id": "airplane",
+      "url": "/assets/vrma/airplane.vrma",
+      "description": "Airplane / arms-out playful pose (not a face scratch)"
+    },
+    {
+      "id": "v_sign",
+      "url": "/assets/vrma/v_sign.vrma",
+      "description": "V-sign"
+    },
+    {
+      "id": "sleepy",
+      "url": "/assets/vrma/sleepy.vrma",
+      "description": "Sleepy pose"
+    },
+    {
+      "id": "surprised",
+      "url": "/assets/vrma/surprised.vrma",
+      "description": "Surprised reaction"
+    },
+    {
+      "id": "angry",
+      "url": "/assets/vrma/angry.vrma",
+      "description": "Angry reaction"
+    },
+    {
+      "id": "blush",
+      "url": "/assets/vrma/blush.vrma",
+      "description": "Bashful / blush"
+    },
+    {
+      "id": "clap",
+      "url": "/assets/vrma/clap.vrma",
+      "description": "Clapping"
+    }
+  ],
+  "locomotion": {
+    "walk": "walk",
+    "run": "run",
+    "careful": "walk_careful",
+    "crouch": "walk_crouch",
+    "crawl": "walk_crawl",
+    "roll": "walk_roll"
+  }
+}

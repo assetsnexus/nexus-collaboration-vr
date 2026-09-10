@@ -1,0 +1,17 @@
+node_modules
+dist
+.DS_Store
+*.local
+.env
+.env.local
+apps/playground/dist
+packages/*/dist
+*.tsbuildinfo
+# Local / licensed character meshes — fetch sample.vrm (see README). Do not commit private models.
+*.vrm
+*.vroid
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
