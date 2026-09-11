@@ -1,0 +1,28 @@
+{
+  "name": "@nexus/scene-kit",
+  "version": "0.1.0",
+  "description": "Headless isomorphic scene graph, ops, browse tools, and compact LLM digests (no Three.js)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./core": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --test src/frame.test.ts src/graph.test.ts src/browse.test.ts src/prompt.test.ts src/events.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

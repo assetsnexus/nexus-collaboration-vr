@@ -1,8 +1,8 @@
-# character-kit + voice-kit
+# character-kit + voice-kit + scene kits
 
-**Free to use** (MIT) VRM companions for your own UI: Three.js + three-vrm, gestures, ambient presence, OpenAI `character_*` tools, and optional STT/TTS.
+**Free to use** (MIT) VRM companions for your own UI: Three.js + three-vrm, gestures, ambient presence, OpenAI `character_*` tools, and optional STT/TTS. Scene graph kits add spawnable objects/robots and tool-call bindings.
 
-License: **[MIT](LICENSE)** (VRMA clips under `apps/playground/public/assets/vrma/` have their own MIT / CC BY notices).
+Repo: [github.com/assetsnexus/nexus-collaboration-vr](https://github.com/assetsnexus/nexus-collaboration-vr) · License: **[MIT](LICENSE)** (VRMA clips under `apps/playground/public/assets/vrma/` have their own MIT / CC BY notices).
 
 ![Group chat with 3D VRM companions](docs/screenshots/01-group-chat-3d.png)
 
@@ -10,7 +10,11 @@ License: **[MIT](LICENSE)** (VRMA clips under `apps/playground/public/assets/vrm
 
 ![Channel matrix](docs/screenshots/03-channel-matrix.png)
 
-**oc-controller** is a small [integration example](../oc-controller/) (private agent-fleet cockpit). **[AssetsNexus.org](https://assetsnexus.org)** is a utilizing platform (Nexus Agents). The kits do not require either UI.
+![DM companion with scene graph objects](docs/screenshots/04-scene-objects-dm.png)
+
+![Desk and floor tool-call sphere](docs/screenshots/05-desk-tool-sphere.png)
+
+**[BAL Agent Fleet Manager](https://github.com/AR-General/BAL-Agent-Fleet-Manager)** (`oc-controller`) is a small integration example (private agent-fleet cockpit). **[AssetsNexus.org](https://assetsnexus.org)** is a utilizing platform (Nexus Agents). The kits do not require either UI.
 
 ## Out of scope here
 
@@ -36,6 +40,10 @@ Doc index: [docs/README.md](docs/README.md). Agent skill text: [packages/charact
 |------|------|------|
 | `packages/character-kit` | `@nexus/character-kit` | three + three-vrm + VRMA + lip-sync; OpenAI `character_*` tool schemas |
 | `packages/voice-kit` | `@nexus/voice-kit` | Silero VAD, browser Whisper, Speaches STT, Fish TTS |
+| `packages/scene-kit` | `@nexus/scene-kit` | Headless scene graph, ops, browse tools, compact LLM digests (no Three) |
+| `packages/objects-kit` | `@nexus/objects-kit` | Primitives + glTF props, effects, load billboards, `object_*` tools |
+| `packages/robots-kit` | `@nexus/robots-kit` | Thin robot/machine kind (glTF + joints); no URDF/drivers yet |
+| `packages/agent-tools-kit` | `@nexus/agent-tools-kit` | Tool-call → entity bindings + default front-spheres |
 | `apps/playground` | `@nexus/vrm-playground` | Vue reference app (not required at runtime) |
 
 ```json
@@ -43,6 +51,8 @@ Doc index: [docs/README.md](docs/README.md). Agent skill text: [packages/charact
   "dependencies": {
     "@nexus/character-kit": "file:../path/to/dev-vrm/packages/character-kit",
     "@nexus/voice-kit": "file:../path/to/dev-vrm/packages/voice-kit",
+    "@nexus/scene-kit": "file:../path/to/dev-vrm/packages/scene-kit",
+    "@nexus/objects-kit": "file:../path/to/dev-vrm/packages/objects-kit",
     "three": "^0.180.0"
   }
 }
@@ -93,7 +103,7 @@ Avoid unsigned “free VRM pack” dumps. A `.glb` is only a VRM if it contains 
 
 ## Example hosts
 
-- **[oc-controller](../oc-controller/)** — small cockpit to privately manage a self-hosted fleet and channels (integration example).
-- **[AssetsNexus.org](https://assetsnexus.org)** — utilizing platform. Prefer **Nexus Agents** for professional work (context/brain management, privacy, agent RBAC, 2000+ physical-world skills, MCP). You can still attach them to oc-controller like OpenClaw or Hermes.
+- **[BAL Agent Fleet Manager](https://github.com/AR-General/BAL-Agent-Fleet-Manager)** — small cockpit to privately manage a self-hosted fleet and channels (integration example).
+- **[AssetsNexus.org](https://assetsnexus.org)** — utilizing platform. Prefer **Nexus Agents** for professional work (context/brain management, privacy, agent RBAC, 2000+ physical-world skills, MCP). You can still attach them to the fleet manager like OpenClaw or Hermes.
 
 Embed the kits in any React, Vue, or vanilla app.

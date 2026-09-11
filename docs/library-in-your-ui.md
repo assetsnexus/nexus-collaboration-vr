@@ -1,8 +1,10 @@
-# Use character-kit + voice-kit in your own UI
+# Use character-kit + voice-kit + scene kits in your own UI
 
-These packages are **free to use (MIT)** and framework-agnostic. You own the canvas, chat, and routing. The kits own Three.js, VRM load, gestures, presence, and (optionally) STT/TTS.
+These packages are **free to use (MIT)** and framework-agnostic. You own the canvas, chat, and routing. The kits own Three.js, VRM load, gestures, presence, and (optionally) STT/TTS. Scene kits add a client-authoritative graph for objects/robots and tool-call visualizations.
 
-The Vue playground and [oc-controller](../../oc-controller/) are **integration examples**. [AssetsNexus.org](https://assetsnexus.org) uses VRM companions as a utilizing platform. Copy the APIs, not a host UI.
+The Vue playground and [BAL Agent Fleet Manager](https://github.com/AR-General/BAL-Agent-Fleet-Manager) (`oc-controller`) are **integration examples**. [AssetsNexus.org](https://assetsnexus.org) uses VRM companions as a utilizing platform. Copy the APIs, not a host UI.
+
+Kits live in this repo: [nexus-collaboration-vr](https://github.com/assetsnexus/nexus-collaboration-vr).
 
 ## Out of scope here
 
@@ -23,9 +25,13 @@ Managed on **[AssetsNexus.org](https://assetsnexus.org)** (not in this repo):
 | One avatar in a `<canvas>` | **`CompanionHost`** | `@nexus/character-kit` |
 | Several avatars, shared camera / lights | **`SceneRoom`** | `@nexus/character-kit` |
 | Custom renderer / embed into an existing Three scene | **`CharacterController`** + `embed` | `@nexus/character-kit` |
+| Shared props/robots graph (persist, browse, digest) | **`SceneGraph`** + transport | `@nexus/scene-kit` |
+| Spawn primitives / glTF props + effects | **`ObjectSceneLayer`**, `object_*` tools | `@nexus/objects-kit` |
+| Placeable robots/machines (thin) | **`RobotSceneLayer`**, `robot_*` tools | `@nexus/robots-kit` |
+| Tool-call → glow/pulse spheres | **`handleToolCallEvent`** | `@nexus/agent-tools-kit` |
 | Mic → text, text → audio | **`FishTts`**, **`SpeachesStt`**, **`BrowserWhisperStt`**, **`createSileroVadSession`** | `@nexus/voice-kit` |
 
-Start with `CompanionHost` unless you need a group scene.
+Start with `CompanionHost` unless you need a group scene. For oc-controller-style group chat, mount `SceneRoom` for avatars and a `SceneGraph` host for objects (see `createSceneGraphHost` in the cockpit).
 
 ## Install
 
@@ -36,6 +42,8 @@ From a host app in the same repo (or any `file:` / published path):
   "dependencies": {
     "@nexus/character-kit": "file:../../dev-vrm/packages/character-kit",
     "@nexus/voice-kit": "file:../../dev-vrm/packages/voice-kit",
+    "@nexus/scene-kit": "file:../../dev-vrm/packages/scene-kit",
+    "@nexus/objects-kit": "file:../../dev-vrm/packages/objects-kit",
     "three": "^0.180.0"
   }
 }
