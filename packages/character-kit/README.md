@@ -16,4 +16,4 @@ Import:
 import { CompanionHost, SceneRoom, CHARACTER_SKILL, parseInlineTags } from '@nexus/character-kit'
 ```
 
-Skill text for agent workspaces: [skill/SKILL.md](skill/SKILL.md).
+Skill text for agent workspaces: [skill/SKILL.md](skill/SKILL.md) (also shipped under repo [`skills/character`](../../../skills/character)).

@@ -5,9 +5,10 @@ How to embed `@nexus/character-kit` and `@nexus/voice-kit` in **your** UI (React
 | Doc | Topic |
 |-----|--------|
 | **[library-in-your-ui.md](library-in-your-ui.md)** | Install, APIs, `CompanionHost`, `SceneRoom`, LLM tools, voice |
+| **[agent-skills.md](agent-skills.md)** | OpenClaw/Hermes skill packs — GitHub sync preferred |
 | [presence-and-tools.md](presence-and-tools.md) | Moods, gaze, clip catalog |
 | [phase2-locomotion.md](phase2-locomotion.md) | Walk / turn / teleport / scene objects |
 
 Screenshots for the public README: [screenshots/](screenshots/).
 
-Agent workspace skill text (copy into OpenClaw/Hermes): [`packages/character-kit/skill/SKILL.md`](../packages/character-kit/skill/SKILL.md).
+Installable skill folders: [`skills/`](../skills/) (`character`, `scene`, `object`, `robot`).

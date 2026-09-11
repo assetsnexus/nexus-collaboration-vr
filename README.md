@@ -1,8 +1,16 @@
 # character-kit + voice-kit + scene kits
 
-**Free to use** (MIT) VRM companions for your own UI: Three.js + three-vrm, gestures, ambient presence, OpenAI `character_*` tools, and optional STT/TTS. Scene graph kits add spawnable objects/robots and tool-call bindings.
+Part of the **open [AssetsNexus.org](https://assetsnexus.org) platform SDK**: MIT VRM companions for your own UI (Three.js + three-vrm, gestures, ambient presence, OpenAI `character_*` tools, optional STT/TTS). Scene graph kits add spawnable objects/robots and tool-call bindings.
+
+AssetsNexus **explicitly supports custom personal clients**. This library is free to use so those clients stay compatible with the platform.
 
 Repo: [github.com/assetsnexus/nexus-collaboration-vr](https://github.com/assetsnexus/nexus-collaboration-vr) · License: **[MIT](LICENSE)** (VRMA clips under `apps/playground/public/assets/vrma/` have their own MIT / CC BY notices).
+
+**Playground** (`pnpm dev`) — no other services required:
+
+![VRM playground via `pnpm dev` — no dependencies](docs/screenshots/00-playground.png)
+
+**Former BAL Agents** integration playground ([BAL Agent Fleet Manager](https://github.com/AR-General/BAL-Agent-Fleet-Manager) / `oc-controller`) — free for personal use, or a starting point for a custom Nexus AI interface. Ask your coding agent to customize it for you:
 
 ![Group chat with 3D VRM companions](docs/screenshots/01-group-chat-3d.png)
 
@@ -14,7 +22,7 @@ Repo: [github.com/assetsnexus/nexus-collaboration-vr](https://github.com/assetsn
 
 ![Desk and floor tool-call sphere](docs/screenshots/05-desk-tool-sphere.png)
 
-**[BAL Agent Fleet Manager](https://github.com/AR-General/BAL-Agent-Fleet-Manager)** (`oc-controller`) is a small integration example (private agent-fleet cockpit). **[AssetsNexus.org](https://assetsnexus.org)** is a utilizing platform (Nexus Agents). The kits do not require either UI.
+The kits do not require that cockpit — embed them in any React, Vue, or vanilla app.
 
 ## Out of scope here
 
@@ -32,7 +40,7 @@ Managed on **[AssetsNexus.org](https://assetsnexus.org)** (not in this repo):
 
 **[docs/library-in-your-ui.md](docs/library-in-your-ui.md)** — `CompanionHost` (one canvas), `SceneRoom` (many avatars), LLM tools, Fish TTS + lip-sync.
 
-Doc index: [docs/README.md](docs/README.md). Agent skill text: [packages/character-kit/skill/SKILL.md](packages/character-kit/skill/SKILL.md).
+Doc index: [docs/README.md](docs/README.md). Agent skills (OpenClaw/Hermes): [skills/](skills/) · [docs/agent-skills.md](docs/agent-skills.md).
 
 ## Packages
 
@@ -103,7 +111,7 @@ Avoid unsigned “free VRM pack” dumps. A `.glb` is only a VRM if it contains 
 
 ## Example hosts
 
-- **[BAL Agent Fleet Manager](https://github.com/AR-General/BAL-Agent-Fleet-Manager)** — small cockpit to privately manage a self-hosted fleet and channels (integration example).
-- **[AssetsNexus.org](https://assetsnexus.org)** — utilizing platform. Prefer **Nexus Agents** for professional work (context/brain management, privacy, agent RBAC, 2000+ physical-world skills, MCP). You can still attach them to the fleet manager like OpenClaw or Hermes.
+- **[AssetsNexus.org](https://assetsnexus.org)** — platform these kits belong to. Prefer **Nexus Agents** for professional work (context/brain management, privacy, agent RBAC, 2000+ physical-world skills, MCP). Custom personal clients are supported; use this SDK to stay compatible.
+- **[BAL Agent Fleet Manager](https://github.com/AR-General/BAL-Agent-Fleet-Manager)** — former BAL Agents integration playground (screenshots above). Free personal use, or ask your coding agent to customize it into your own Nexus AI interface.
 
 Embed the kits in any React, Vue, or vanilla app.

@@ -12,7 +12,7 @@ Inbound aliases (do not advertise; client still accepts them):
 - `character.play_gesture` (dotted)
 - short names: `play_gesture`, `set_mood`, …
 
-Copy this folder into an OpenClaw workspace `skills/character/`, or import from `@nexus/character-kit`:
+**Prefer GitHub sync** from [nexus-collaboration-vr `skills/character`](https://github.com/assetsnexus/nexus-collaboration-vr/tree/main/skills/character) (same content as repo `skills/character/`). Or copy this folder into an OpenClaw/Hermes workspace `skills/character/`. Import tools from `@nexus/character-kit`:
 
 ```ts
 import { CHARACTER_SKILL, parseInlineTags } from '@nexus/character-kit'

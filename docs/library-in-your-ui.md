@@ -240,7 +240,7 @@ await host.director.applyToolCalls(calls);
 
 Name aliases: `character.play_gesture` and `play_gesture` resolve to `character_play_gesture`.
 
-Prefer compact tags in assistant text for simple beats; use tools for sequences and locomotion. Details: [presence-and-tools.md](presence-and-tools.md), [phase2-locomotion.md](phase2-locomotion.md), [skill/SKILL.md](../packages/character-kit/skill/SKILL.md).
+Prefer compact tags in assistant text for simple beats; use tools for sequences and locomotion. Details: [presence-and-tools.md](presence-and-tools.md), [phase2-locomotion.md](phase2-locomotion.md), [agent-skills.md](agent-skills.md), [skill/SKILL.md](../packages/character-kit/skill/SKILL.md).
 
 ## Inline tags (no tools)
 
