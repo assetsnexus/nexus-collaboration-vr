@@ -225,16 +225,24 @@ export class CompanionHost {
     timeScale?: number,
     sceneTarget?: string,
   ): void {
-    const result = this.controller.playGesture(id, loop, 0.25, timeScale, source, sceneTarget)
-    if (result === 'skipped') {
-      this.logger.info?.('[character-kit] gesture skipped', { id, source, detail })
+    if (this.disposed || !this.loadedUrl) {
+      this.logger.info?.('[character-kit] gesture skipped (not loaded)', { id, source, detail })
       return
     }
-    this.director.pushAction('gesture', loop ? `${id} · loop` : id, source, detail, sceneTarget, {
-      durationMs: this.controller.gesturePlaybackMs(id, { loop, timeScale }) ?? undefined,
-      loop,
-      timeScale,
-    })
+    try {
+      const result = this.controller.playGesture(id, loop, 0.25, timeScale, source, sceneTarget)
+      if (result === 'skipped') {
+        this.logger.info?.('[character-kit] gesture skipped', { id, source, detail })
+        return
+      }
+      this.director.pushAction('gesture', loop ? `${id} · loop` : id, source, detail, sceneTarget, {
+        durationMs: this.controller.gesturePlaybackMs(id, { loop, timeScale }) ?? undefined,
+        loop,
+        timeScale,
+      })
+    } catch (err) {
+      this.logger.warn?.('[character-kit] playGesture failed', id, err)
+    }
   }
 
   setAgentId(agentId?: string): void {

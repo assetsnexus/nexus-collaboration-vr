@@ -1705,7 +1705,11 @@ export class CharacterController {
     sceneTarget?: string,
   ): GesturePlayResult {
     if (sceneTarget) this.faceSceneTarget(sceneTarget)
-    if (!this.mixer) throw new Error('no mixer')
+    if (!this.mixer) {
+      // Avatar still loading / unloaded — callers (status motions, UI) race the mixer.
+      this.logger.warn?.('[character-kit] playGesture: no mixer', id)
+      return 'skipped'
+    }
     // Don't let ambient/status gestures yank the body mid walk/turn — locomotion
     // owns the mixer until idle. Overlay faces/emotions still go through other APIs.
     if (this.isLocomoting() && id !== 'jump') {

@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   assetBodyLooksValid,
+  assetFetchRetryDelayMs,
   assetLoadRatio,
+  isRetryableAssetFetchError,
   resourcePathForUrl,
   shouldPersistAssetUrl,
+  withAssetFetchRetries,
 } from "./asset-cache.ts";
 
 describe("resourcePathForUrl", () => {
@@ -49,5 +52,53 @@ describe("assetLoadRatio", () => {
     assert.equal(assetLoadRatio(50, 100), 0.5);
     assert.equal(assetLoadRatio(0, 0), -1);
     assert.equal(assetLoadRatio(10, Number.NaN), -1);
+  });
+});
+
+describe("assetFetchRetryDelayMs", () => {
+  it("doubles from 300ms", () => {
+    assert.equal(assetFetchRetryDelayMs(0), 300);
+    assert.equal(assetFetchRetryDelayMs(1), 600);
+    assert.equal(assetFetchRetryDelayMs(2), 1200);
+    assert.equal(assetFetchRetryDelayMs(3), 2400);
+  });
+});
+
+describe("isRetryableAssetFetchError", () => {
+  it("retries network and 5xx, not 404 or invalid body", () => {
+    assert.equal(isRetryableAssetFetchError(new TypeError("Failed to fetch")), true);
+    assert.equal(isRetryableAssetFetchError(new Error("Failed to fetch /x: HTTP 503")), true);
+    assert.equal(isRetryableAssetFetchError(new Error("Failed to fetch /x: HTTP 429")), true);
+    assert.equal(isRetryableAssetFetchError(new Error("Failed to fetch /x: HTTP 404")), false);
+    assert.equal(
+      isRetryableAssetFetchError(new Error("Failed to fetch /x: empty or invalid body (0 bytes)")),
+      false,
+    );
+  });
+});
+
+describe("withAssetFetchRetries", () => {
+  it("succeeds after transient failures within 5 attempts", async () => {
+    let n = 0;
+    const value = await withAssetFetchRetries("/dev-vrm-assets/vrma/v_sign.vrma", async () => {
+      n += 1;
+      if (n < 3) throw new TypeError("Failed to fetch");
+      return "ok";
+    });
+    assert.equal(value, "ok");
+    assert.equal(n, 3);
+  });
+
+  it("does not retry 404", async () => {
+    let n = 0;
+    await assert.rejects(
+      () =>
+        withAssetFetchRetries("/missing.vrma", async () => {
+          n += 1;
+          throw new Error("Failed to fetch /missing.vrma: HTTP 404");
+        }),
+      /HTTP 404/,
+    );
+    assert.equal(n, 1);
   });
 });

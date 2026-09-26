@@ -2,6 +2,10 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 export const CHARACTER_ASSET_CACHE = 'openclaw-character-assets-v1'
 export const MIN_ASSET_BYTES = 8
+/** Total tries including the first (VPN / ERR_NETWORK_CHANGED often needs a few). */
+export const ASSET_FETCH_ATTEMPTS = 5
+/** First retry delay; doubles each subsequent retry (300 → 600 → 1200 → 2400). */
+export const ASSET_FETCH_RETRY_BASE_MS = 300
 
 export function resourcePathForUrl(url: string): string {
   const q = url.split('?')[0] || url
@@ -31,6 +35,53 @@ export function assetLoadRatio(loaded: number, total: number): number {
     return Math.min(1, Math.max(0, loaded / total))
   }
   return -1
+}
+
+/** Delay before retry `attemptIndex` (0 = first retry after initial failure). */
+export function assetFetchRetryDelayMs(attemptIndex: number): number {
+  const i = Math.max(0, Math.floor(attemptIndex))
+  return ASSET_FETCH_RETRY_BASE_MS * 2 ** i
+}
+
+export function isRetryableAssetFetchError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  const lower = msg.toLowerCase()
+  // Permanent client errors — do not burn retries on missing assets.
+  const http = lower.match(/\bhttp\s+(\d{3})\b/)
+  if (http) {
+    const code = Number(http[1])
+    if (code === 408 || code === 425 || code === 429) return true
+    if (code >= 400 && code < 500) return false
+    if (code >= 500) return true
+  }
+  if (/empty or invalid body/.test(lower)) return false
+  return true
+}
+
+export async function withAssetFetchRetries<T>(
+  url: string,
+  run: () => Promise<T>,
+  opts?: { attempts?: number },
+): Promise<T> {
+  const attempts = Math.max(1, opts?.attempts ?? ASSET_FETCH_ATTEMPTS)
+  let lastErr: unknown
+  for (let tryIndex = 0; tryIndex < attempts; tryIndex++) {
+    try {
+      return await run()
+    } catch (err) {
+      lastErr = err
+      const retriesLeft = attempts - tryIndex - 1
+      if (retriesLeft <= 0 || !isRetryableAssetFetchError(err)) throw err
+      const delayMs = assetFetchRetryDelayMs(tryIndex)
+      console.warn(
+        `[character-kit] asset fetch retry ${tryIndex + 1}/${attempts - 1} in ${delayMs}ms`,
+        url,
+        err instanceof Error ? err.message : err,
+      )
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
 }
 
 async function persistGet(url: string): Promise<ArrayBuffer | null> {
@@ -71,16 +122,18 @@ export async function fetchCachedArrayBuffer(url: string): Promise<ArrayBuffer> 
   const cached = await persistGet(url)
   if (cached) return cached
 
-  const res = await fetch(url)
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`)
-  }
-  const data = await res.arrayBuffer()
-  if (!assetBodyLooksValid(url, data)) {
-    throw new Error(`Failed to fetch ${url}: empty or invalid body (${data.byteLength} bytes)`)
-  }
-  await persistPut(url, data, res.headers.get('Content-Type') || 'application/octet-stream')
-  return data
+  return withAssetFetchRetries(url, async () => {
+    const res = await fetch(url)
+    if (!res.ok) {
+      throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`)
+    }
+    const data = await res.arrayBuffer()
+    if (!assetBodyLooksValid(url, data)) {
+      throw new Error(`Failed to fetch ${url}: empty or invalid body (${data.byteLength} bytes)`)
+    }
+    await persistPut(url, data, res.headers.get('Content-Type') || 'application/octet-stream')
+    return data
+  })
 }
 
 /**
@@ -93,10 +146,12 @@ export async function loadCachedGltf(
   url: string,
   onProgress?: (ratio: number) => void,
 ): Promise<GLTF> {
-  return loader.loadAsync(url, (ev) => {
-    if (!onProgress) return
-    onProgress(assetLoadRatio(ev.loaded, ev.total))
-  })
+  return withAssetFetchRetries(url, () =>
+    loader.loadAsync(url, (ev) => {
+      if (!onProgress) return
+      onProgress(assetLoadRatio(ev.loaded, ev.total))
+    }),
+  )
 }
 
 export async function preloadCharacterAssets(urls: string[]): Promise<void> {
