@@ -1,4 +1,5 @@
 export { CharacterController } from './controller.js'
+export { DEFAULT_SAMPLE_VRM } from './default-sample-vrm.js'
 export { SceneRoom } from './scene-room.js'
 export type {
   SceneRoomAvatarConfig,

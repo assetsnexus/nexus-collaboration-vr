@@ -30,6 +30,7 @@ import {
   OCCUPANT_LOAD_CANCELLED,
 } from './scene-occupants.js'
 import { StandInMarker } from './stand-in.js'
+import { DEFAULT_SAMPLE_VRM } from './default-sample-vrm.js'
 
 export interface SceneRoomOptions {
   background?: number
@@ -106,8 +107,6 @@ interface PlaceholderState {
 
 const DEFAULT_BG = 0x12171c
 const DEFAULT_SPACING = 1.25
-const DEFAULT_SAMPLE_VRM =
-  'https://cdn.jsdelivr.net/gh/pixiv/three-vrm@dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm'
 const LABEL_CLEARANCE = 0.28
 const HEAD_LABEL_LIFT = 0.85
 const PLACEHOLDER_LABEL_Y = 1.85
