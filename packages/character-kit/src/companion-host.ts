@@ -23,6 +23,13 @@ import {
 } from './interaction-ack.js'
 import { StandInMarker } from './stand-in.js'
 import { fetchCachedArrayBuffer, preloadCharacterAssets } from './asset-cache.js'
+import { mayAutoDownloadAvatarAsset } from './avatar-asset-gate.js'
+import type { AvatarAssetValidationStatus } from './avatar-asset-gate.js'
+import {
+  emptyAvatarAssetLoadProgress,
+  type AvatarAssetLoadProgress,
+  type AvatarAssetLoadProgressListener,
+} from './load-progress.js'
 
 export type CompanionClothesInput = {
   id?: string
@@ -40,6 +47,13 @@ export type CompanionLoadOptions = {
   bodyFollowCamera?: boolean
   gazeLimits?: Partial<GazeLimits>
   presence?: DirectorOptions['presence']
+  /** Catalog gate for `vrmUrl` when not previewing. */
+  validationStatus?: AvatarAssetValidationStatus | string | null
+  /**
+   * Owner-local studio preview: allow unverified / pending VRM+VRMA loads.
+   * SceneRoom occupant loads for other participants must not set this.
+   */
+  previewUnverified?: boolean
 }
 
 export type CompanionHostOptions = CharacterOptions & {
@@ -63,6 +77,8 @@ export class CompanionHost {
   private readonly interactionAck: InteractionAck
   private readonly standIn: StandInMarker
   private lastUserLogAt: Record<string, number> = {}
+  private loadProgress: AvatarAssetLoadProgress = emptyAvatarAssetLoadProgress()
+  private readonly loadProgressListeners = new Set<AvatarAssetLoadProgressListener>()
 
   constructor(canvas: HTMLCanvasElement, options: CompanionHostOptions = {}) {
     this.logger = options.logger ?? console
@@ -100,6 +116,30 @@ export class CompanionHost {
 
   onAction(listener: (ev: CharacterActionEvent) => void): () => void {
     return this.director.onAction(listener)
+  }
+
+  getLoadProgress(): AvatarAssetLoadProgress {
+    return { ...this.loadProgress }
+  }
+
+  onLoadProgress(listener: AvatarAssetLoadProgressListener): () => void {
+    this.loadProgressListeners.add(listener)
+    listener(this.getLoadProgress())
+    return () => {
+      this.loadProgressListeners.delete(listener)
+    }
+  }
+
+  private setLoadProgress(partial: Partial<AvatarAssetLoadProgress>): void {
+    this.loadProgress = { ...this.loadProgress, ...partial }
+    const snapshot = this.getLoadProgress()
+    for (const listener of this.loadProgressListeners) {
+      try {
+        listener(snapshot)
+      } catch {
+        /* ignore listener errors */
+      }
+    }
   }
 
   pushAction(
@@ -151,6 +191,7 @@ export class CompanionHost {
     this.standIn.setLoadFailed(false)
     this.standIn.setVisible(true)
     this.standIn.setLoadProgress(0)
+    this.setLoadProgress({ model: 0, gestures: null })
     this.controller.getRig().visible = false
     const mood = (opts.mood || 'neutral') as PresenceMoodId
 
@@ -162,11 +203,34 @@ export class CompanionHost {
 
     await this.controller.setClothes(toClothesSpec(opts.clothes))
     if (this.disposed) throw new Error('CompanionHost disposed')
+    const vrmGate = mayAutoDownloadAvatarAsset({
+      url: opts.vrmUrl,
+      validationStatus: opts.validationStatus,
+      previewUnverified: opts.previewUnverified,
+    })
+    if (!vrmGate.allow) {
+      this.standIn.setLoadProgress(null)
+      this.standIn.setLoadFailed(true)
+      this.setLoadProgress({ model: null, gestures: null })
+      this.logger.warn?.('[character-kit] CompanionHost blocked VRM download', {
+        url: opts.vrmUrl,
+        reason: vrmGate.reason,
+        validationStatus: opts.validationStatus ?? null,
+      })
+      throw new Error(`Avatar asset blocked: ${vrmGate.reason}`)
+    }
     try {
-      await this.controller.loadVRM(opts.vrmUrl, (ratio) => this.standIn.setLoadProgress(ratio))
+      await this.controller.loadVRM(opts.vrmUrl, (ratio) => {
+        this.standIn.setLoadProgress(ratio)
+        this.setLoadProgress({ model: ratio })
+      }, {
+        previewUnverified: opts.previewUnverified,
+        validationStatus: opts.validationStatus,
+      })
     } catch (err) {
       this.standIn.setLoadProgress(null)
       this.standIn.setLoadFailed(true)
+      this.setLoadProgress({ model: null, gestures: null })
       throw err
     }
     if (this.disposed) throw new Error('CompanionHost disposed')
@@ -174,6 +238,7 @@ export class CompanionHost {
     this.controller.getRig().visible = true
     this.standIn.setLoadProgress(null)
     this.standIn.setVisible(false)
+    this.setLoadProgress({ model: null })
 
     this.controller.setSaccadesEnabled(true)
     this.director.setController(this.controller)
@@ -190,11 +255,26 @@ export class CompanionHost {
 
     if (opts.gestureManifestUrl) {
       const packUrl = opts.gestureManifestUrl
+      const previewUnverified = opts.previewUnverified === true
+      this.setLoadProgress({ gestures: 0 })
       void (async () => {
         try {
-          const manifest = await fetchRewrittenManifest(packUrl)
+          const manifest = await fetchRewrittenManifest(packUrl, {
+            previewUnverified,
+            onSkip: (info) => {
+              this.logger.warn?.('[character-kit] CompanionHost skipped gesture asset', info)
+            },
+          })
           if (this.disposed) return
-          await this.controller.loadGesturePack(manifest)
+          const loaded = await this.controller.loadGesturePack(manifest, {
+            previewUnverified,
+            onProgress: (ratio) => this.setLoadProgress({ gestures: ratio }),
+          })
+          if (loaded.skipped.length) {
+            this.logger.warn?.('[character-kit] CompanionHost skipped gesture clips', {
+              skipped: loaded.skipped,
+            })
+          }
           if (this.disposed) return
           if (!this.controller.isIdlePlaying()) {
             this.controller.setIdleLoop('idle', { crossFade: 0 })
@@ -202,6 +282,8 @@ export class CompanionHost {
         } catch (err) {
           if (this.disposed) return
           this.logger.warn?.('[character-kit] CompanionHost gesture pack failed', err)
+        } finally {
+          if (!this.disposed) this.setLoadProgress({ gestures: null })
         }
       })()
     }
@@ -465,9 +547,28 @@ function toClothesSpec(clothes?: CompanionClothesInput): ClothesSpec {
   }
 }
 
+export type FetchRewrittenManifestOptions = {
+  previewUnverified?: boolean
+  onSkip?: (info: { id?: string; url: string; reason: string }) => void
+}
+
 /** Fetch manifest and rewrite `/assets/vrma/...` (or relative) URLs to sit beside the manifest. */
-export async function fetchRewrittenManifest(manifestUrl: string): Promise<GestureManifest> {
-  const buf = await fetchCachedArrayBuffer(manifestUrl)
+export async function fetchRewrittenManifest(
+  manifestUrl: string,
+  opts: FetchRewrittenManifestOptions = {},
+): Promise<GestureManifest> {
+  const packGate = mayAutoDownloadAvatarAsset({
+    url: manifestUrl,
+    previewUnverified: opts.previewUnverified,
+  })
+  if (!packGate.allow) {
+    opts.onSkip?.({ url: manifestUrl, reason: packGate.reason })
+    return { gestures: [] }
+  }
+
+  const buf = await fetchCachedArrayBuffer(manifestUrl, {
+    previewUnverified: opts.previewUnverified,
+  })
   const data = JSON.parse(new TextDecoder().decode(buf)) as GestureManifest
   const base = manifestUrl.replace(/\/[^/]*$/, '')
   const rewritten: GestureManifest = {
@@ -479,6 +580,22 @@ export async function fetchRewrittenManifest(manifestUrl: string): Promise<Gestu
       return { ...g, url: `${base}/${file}` }
     }),
   }
-  void preloadCharacterAssets(rewritten.gestures.map((g) => g.url).filter(Boolean))
-  return rewritten
+
+  const allowedUrls: string[] = []
+  const gestures = rewritten.gestures.filter((g) => {
+    const gate = mayAutoDownloadAvatarAsset({
+      url: g.url,
+      validationStatus: g.validationStatus,
+      previewUnverified: opts.previewUnverified,
+    })
+    if (!gate.allow) {
+      opts.onSkip?.({ id: g.id, url: g.url, reason: gate.reason })
+      return false
+    }
+    if (g.url) allowedUrls.push(g.url)
+    return true
+  })
+
+  void preloadCharacterAssets(allowedUrls, { previewUnverified: opts.previewUnverified })
+  return { ...rewritten, gestures }
 }

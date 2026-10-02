@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  DEFAULT_ASSET_TTL_MS,
   assetBodyLooksValid,
   assetFetchRetryDelayMs,
   assetLoadRatio,
+  avatarAssetCacheKey,
+  canonicalizePublicAssetUrl,
+  isAvatarAssetCacheEntryFresh,
   isRetryableAssetFetchError,
   resourcePathForUrl,
   shouldPersistAssetUrl,
+  shouldStoreAvatarAsset,
   withAssetFetchRetries,
 } from "./asset-cache.ts";
 
@@ -20,13 +25,72 @@ describe("resourcePathForUrl", () => {
   });
 });
 
-describe("shouldPersistAssetUrl", () => {
+describe("avatarAssetCacheKey", () => {
+  it("shares public URL keys across users (userId ignored)", () => {
+    const url = "https://cdn.example/models/public.vrm";
+    assert.equal(
+      avatarAssetCacheKey({ url, userId: "alice" }),
+      avatarAssetCacheKey({ url, userId: "bob" }),
+    );
+    assert.equal(avatarAssetCacheKey({ url, userId: "alice" }), canonicalizePublicAssetUrl(url));
+  });
+
+  it("prefers catalog asset id over URL and ignores userId", () => {
+    const a = avatarAssetCacheKey({
+      url: "https://cdn.example/a.vrm",
+      assetId: "asset-123",
+      userId: "alice",
+    });
+    const b = avatarAssetCacheKey({
+      url: "https://cdn.example/other.vrm",
+      assetId: "asset-123",
+      userId: "bob",
+    });
+    assert.equal(a, b);
+    assert.match(a, /asset-123/);
+  });
+});
+
+describe("shouldPersistAssetUrl / shouldStoreAvatarAsset", () => {
   it("caches http and same-origin paths, not blobs", () => {
     assert.equal(shouldPersistAssetUrl("/dev-vrm-assets/vrm/tori.vrm"), true);
     assert.equal(shouldPersistAssetUrl("https://cdn.example/a.vrm"), true);
     assert.equal(shouldPersistAssetUrl("blob:http://localhost/abc"), false);
     assert.equal(shouldPersistAssetUrl("data:application/octet-stream;base64,aa"), false);
     assert.equal(shouldPersistAssetUrl(""), false);
+  });
+
+  it("skips blob and previewUnverified from shared store", () => {
+    assert.equal(
+      shouldStoreAvatarAsset({ url: "blob:http://localhost/abc" }),
+      false,
+    );
+    assert.equal(
+      shouldStoreAvatarAsset({
+        url: "https://cdn.example/pending.vrm",
+        previewUnverified: true,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldStoreAvatarAsset({
+        url: "https://cdn.example/verified.vrm",
+        validationStatus: "verified",
+      }),
+      true,
+    );
+  });
+});
+
+describe("isAvatarAssetCacheEntryFresh", () => {
+  it("treats expired entries as a stale miss", () => {
+    const fetchedAt = 1_000_000;
+    const ttlMs = DEFAULT_ASSET_TTL_MS;
+    assert.equal(isAvatarAssetCacheEntryFresh(fetchedAt, ttlMs, fetchedAt + 1), true);
+    assert.equal(isAvatarAssetCacheEntryFresh(fetchedAt, ttlMs, fetchedAt + ttlMs - 1), true);
+    assert.equal(isAvatarAssetCacheEntryFresh(fetchedAt, ttlMs, fetchedAt + ttlMs), false);
+    assert.equal(isAvatarAssetCacheEntryFresh(fetchedAt, ttlMs, fetchedAt + ttlMs + 10_000), false);
+    assert.equal(isAvatarAssetCacheEntryFresh(0, ttlMs, Date.now()), false);
   });
 });
 
@@ -41,9 +105,10 @@ describe("assetBodyLooksValid", () => {
     assert.equal(assetBodyLooksValid("/a.vrm", bytesOf("<!doctype html>")), false);
   });
 
-  it('accepts a GLB magic header and JSON manifests', () => {
+  it("accepts a GLB magic header, JSON manifests, and pictures", () => {
     assert.equal(assetBodyLooksValid("/a.vrm", bytesOf("glTF....")), true);
     assert.equal(assetBodyLooksValid("/vrma/manifest.json", bytesOf('{"gestures":[]}')), true);
+    assert.equal(assetBodyLooksValid("/portraits/a.png", bytesOf("PNG.....")), true);
   });
 });
 

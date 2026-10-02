@@ -1,5 +1,16 @@
 export { CharacterController } from './controller.js'
+export type { LoadGesturePackOptions, LoadGesturePackResult } from './controller.js'
 export { DEFAULT_SAMPLE_VRM } from './default-sample-vrm.js'
+export {
+  mayAutoDownloadAvatarAsset,
+  isPlatformDefaultGestureAsset,
+  isPlatformDefaultAvatarAsset,
+} from './avatar-asset-gate.js'
+export type {
+  AvatarAssetDescriptor,
+  AvatarAssetValidationStatus,
+  AutoDownloadDecision,
+} from './avatar-asset-gate.js'
 export { SceneRoom } from './scene-room.js'
 export type {
   SceneRoomAvatarConfig,
@@ -27,8 +38,39 @@ export {
   DEFAULT_FRAME_HEAD_Y,
 } from './scene-camera.js'
 export { CompanionHost, fetchRewrittenManifest } from './companion-host.js'
+export type { FetchRewrittenManifestOptions } from './companion-host.js'
 export { StandInMarker } from './stand-in.js'
-export { preloadCharacterAssets, fetchCachedArrayBuffer } from './asset-cache.js'
+export {
+  preloadCharacterAssets,
+  fetchCachedArrayBuffer,
+  fetchCachedPictureObjectUrl,
+  loadCachedGltf,
+  setAvatarAssetCacheBackend,
+  avatarAssetCacheKey,
+  shouldStoreAvatarAsset,
+  isAvatarAssetCacheEntryFresh,
+  canonicalizePublicAssetUrl,
+  CHARACTER_ASSET_CACHE,
+  DEFAULT_ASSET_TTL_MS,
+} from './asset-cache.js'
+export type {
+  AvatarAssetCacheBackend,
+  AvatarAssetCacheKeyInput,
+  AvatarAssetCacheStored,
+  FetchCachedOptions,
+} from './asset-cache.js'
+export {
+  emptyAvatarAssetLoadProgress,
+  type AvatarAssetLoadProgress,
+  type AvatarAssetLoadProgressListener,
+} from './load-progress.js'
+export {
+  createNativeAvatarCacheBackend,
+  installNativeAvatarCacheFallback,
+  type NativeAvatarCacheRequest,
+  type NativeAvatarCacheResult,
+  type NativeAvatarCacheTransport,
+} from './native-avatar-cache.js'
 export {
   InteractionAck,
   ACK_IGNORE_SELECTOR,
@@ -351,3 +393,52 @@ export {
   parseWalkTrailColor,
 } from './walk-trail.js'
 export type { WalkTrailOptions } from './walk-trail.js'
+export {
+  VIEWER_PROFILES,
+  findViewerProfile,
+  clampIpdM,
+  clampDistortionScale,
+  IPD_MIN_M,
+  IPD_MAX_M,
+  IPD_DEFAULT_M,
+  PHONE_VR_STORAGE_KEY,
+  defaultPhoneVrSettings,
+  normalizePhoneVrSettings,
+  readPhoneVrSettings,
+  writePhoneVrSettings,
+  resolveActiveViewer,
+} from './viewer-profiles.js'
+export type { ViewerProfile, ViewerDistortion, PhoneVrSettingsV1 } from './viewer-profiles.js'
+export {
+  eyeOffsetLocalX,
+  eyeWorldPosition,
+  barrelScale,
+  undistortRadius,
+  distortSampleUv,
+  recenterYaw,
+  applyYawRecenter,
+  orientationEulerRad,
+  isOrientationStalled,
+  orientationDeltaSignificant,
+} from './phone-vr-math.js'
+export type { EyeId, Vec3, YawRecenterState } from './phone-vr-math.js'
+export {
+  canStartImmersiveVr,
+  immersiveVrSessionInit,
+  normalizeVrReferenceSpace,
+  startImmersiveVrSession,
+  stopImmersiveVrSession,
+  vrSupportMessage,
+  phoneVrErrorMessage,
+} from './webxr-session.js'
+export type {
+  VrReferenceSpaceId,
+  ImmersiveVrSessionInit,
+  VrSupportStatus,
+  PhoneVrErrorCode,
+  XrSessionLike,
+  XrRendererLike,
+} from './webxr-session.js'
+export { PhoneVrStereoRenderer } from './phone-vr-stereo.js'
+export { PhoneVrController } from './phone-vr-controller.js'
+export type { PhoneVrMode, PhoneVrStatus, PhoneVrHost } from './phone-vr-controller.js'

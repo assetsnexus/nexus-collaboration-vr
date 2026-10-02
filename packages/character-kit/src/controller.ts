@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
-import { loadCachedGltf } from './asset-cache.js'
+import { fetchCachedArrayBuffer, loadCachedGltf } from './asset-cache.js'
 import { vrmSceneIsRenderable } from './vrm-ready.js'
 import { loadVrmAnimations } from './vrma-loader.js'
 import {
@@ -140,6 +140,18 @@ import type {
   WalkOptions,
   WalkTarget,
 } from './types.js'
+import { mayAutoDownloadAvatarAsset } from './avatar-asset-gate.js'
+
+export type LoadGesturePackOptions = {
+  /** Owner-local studio preview may fetch unverified clips. */
+  previewUnverified?: boolean
+  /** Overall gesture-pack fetch progress (0–1 or -1 indeterminate). */
+  onProgress?: (ratio: number) => void
+}
+
+export type LoadGesturePackResult = {
+  skipped: Array<{ id: string; url: string; reason: string }>
+}
 
 type EventHandler = (ev: CharacterEvent) => void
 
@@ -445,7 +457,11 @@ export class CharacterController {
     }
   }
 
-  async loadVRM(url: string, onProgress?: (ratio: number) => void): Promise<void> {
+  async loadVRM(
+    url: string,
+    onProgress?: (ratio: number) => void,
+    opts: { previewUnverified?: boolean; assetId?: string | null; validationStatus?: string | null } = {},
+  ): Promise<void> {
     if (this.disposed) throw new Error('CharacterController disposed')
     this.disposeClothesOverlayGroup()
     this.nativeClothes = []
@@ -453,7 +469,11 @@ export class CharacterController {
     loader.register((parser) => new VRMLoaderPlugin(parser))
     loader.register((parser) => new VRMAnimationLoaderPlugin(parser))
 
-    const gltf = await loadCachedGltf(loader, url, onProgress)
+    const gltf = await loadCachedGltf(loader, url, onProgress, {
+      previewUnverified: opts.previewUnverified,
+      assetId: opts.assetId,
+      validationStatus: opts.validationStatus,
+    })
     if (this.disposed) throw new Error('CharacterController disposed')
     const vrm = gltf.userData.vrm as VRM | undefined
     if (!vrm) throw new Error(`No VRM in ${url}`)
@@ -1371,11 +1391,32 @@ export class CharacterController {
     }
   }
 
-  async loadGesturePack(manifest: GestureManifest | string): Promise<void> {
-    const data: GestureManifest =
-      typeof manifest === 'string'
-        ? await (await fetch(manifest)).json()
-        : manifest
+  async loadGesturePack(
+    manifest: GestureManifest | string,
+    opts: LoadGesturePackOptions = {},
+  ): Promise<LoadGesturePackResult> {
+    const skipped: LoadGesturePackResult['skipped'] = []
+    const previewUnverified = opts.previewUnverified === true
+
+    let data: GestureManifest
+    if (typeof manifest === 'string') {
+      const packGate = mayAutoDownloadAvatarAsset({
+        url: manifest,
+        previewUnverified,
+      })
+      if (!packGate.allow) {
+        skipped.push({ id: '', url: manifest, reason: packGate.reason })
+        this.logger.warn?.('[character-kit] skip unverified gesture manifest', {
+          url: manifest,
+          reason: packGate.reason,
+        })
+        return { skipped }
+      }
+      const buf = await fetchCachedArrayBuffer(manifest, { previewUnverified })
+      data = JSON.parse(new TextDecoder().decode(buf)) as GestureManifest
+    } else {
+      data = manifest
+    }
 
     if (!this.vrm || !this.mixer) {
       throw new Error('loadVRM before loadGesturePack')
@@ -1387,14 +1428,36 @@ export class CharacterController {
       this.logger.info?.('[character-kit] locomotion clip overrides', this.locomotionOverrides)
     }
 
-    const loadEntry = async (entry: (typeof data.gestures)[number]): Promise<void> => {
+    const loadEntry = async (
+      entry: (typeof data.gestures)[number],
+      reportDone?: () => void,
+    ): Promise<void> => {
       if (this.disposed) return
       if (/test\.vrma$/i.test(entry.url)) {
         this.logger.info?.('[character-kit] skip demo VRMA', entry.id, entry.url)
+        reportDone?.()
+        return
+      }
+      const gate = mayAutoDownloadAvatarAsset({
+        url: entry.url,
+        validationStatus: entry.validationStatus,
+        previewUnverified,
+      })
+      if (!gate.allow) {
+        skipped.push({ id: entry.id, url: entry.url, reason: gate.reason })
+        this.logger.warn?.('[character-kit] skip unverified gesture clip', {
+          id: entry.id,
+          url: entry.url,
+          reason: gate.reason,
+        })
+        reportDone?.()
         return
       }
       try {
-        const animations = await loadVrmAnimations(entry.url)
+        const animations = await loadVrmAnimations(entry.url, undefined, {
+          previewUnverified,
+          validationStatus: entry.validationStatus,
+        })
         if (this.disposed || !this.vrm) return
         const vrmAnim = animations[0]
         if (!vrmAnim) {
@@ -1449,24 +1512,44 @@ export class CharacterController {
         }
       } catch (err) {
         this.logger.error?.('[character-kit] gesture load failed', entry.id, err)
+      } finally {
+        reportDone?.()
       }
     }
 
     const gestures = data.gestures || []
     const idleEntry = gestures.find((g) => g.id === 'idle')
     const rest = gestures.filter((g) => g.id !== 'idle')
-    if (idleEntry) await loadEntry(idleEntry)
+    const total = gestures.length
+    let done = 0
+    const reportProgress = () => {
+      if (!opts.onProgress) return
+      if (total <= 0) {
+        opts.onProgress(1)
+        return
+      }
+      opts.onProgress(Math.min(1, done / total))
+    }
+    const markDone = () => {
+      done += 1
+      reportProgress()
+    }
+    opts.onProgress?.(total > 0 ? 0 : 1)
+    if (idleEntry) await loadEntry(idleEntry, markDone)
     if (this.disposed) throw new Error('CharacterController disposed')
     this.startIdle()
-    await Promise.all(rest.map((entry) => loadEntry(entry)))
+    await Promise.all(rest.map((entry) => loadEntry(entry, markDone)))
     if (this.disposed) throw new Error('CharacterController disposed')
     if (!this.isIdlePlaying()) this.startIdle()
+    opts.onProgress?.(1)
 
     this.logger.info?.('[character-kit] gestures loaded', {
       count: this.gestures.size,
       ids: [...this.gestures.keys()],
       overlay: [...this.gestures.values()].filter((g) => g.overlay).map((g) => g.id),
+      skipped: skipped.length,
     })
+    return { skipped }
   }
 
   /** Must be called from a user gesture for AudioContext / lip-sync. */

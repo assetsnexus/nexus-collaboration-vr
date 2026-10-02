@@ -56,6 +56,8 @@ export interface GestureManifestEntry {
   url: string
   loop?: boolean
   description?: string
+  /** Catalog gate: only `verified` (or platform-default URLs) auto-download in rooms. */
+  validationStatus?: 'pending_admin' | 'rejected' | 'verified' | string
 }
 
 /** One clip currently loaded on a character (VRMA or procedural). */

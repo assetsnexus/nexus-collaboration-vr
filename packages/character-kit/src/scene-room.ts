@@ -4,6 +4,7 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import { CharacterController } from './controller.js'
 import { AnimationDirector } from './animation-director.js'
 import { fetchRewrittenManifest } from './companion-host.js'
+import { mayAutoDownloadAvatarAsset } from './avatar-asset-gate.js'
 import {
   parseInlineTags,
   defaultInlineCatalog,
@@ -19,7 +20,7 @@ import {
 import { SceneObjectLayer } from './scene-fx.js'
 import { SceneEventLog, type CompactSceneEvent } from './scene-events.js'
 import { layoutSpawnSlots, type SpawnSlot } from './spawn-slots.js'
-import { cameraYawTowardTarget } from './scene-camera.js'
+import { cameraPoseFacingAvatar, cameraYawTowardTarget } from './scene-camera.js'
 import {
   isOccupantLoadCancelled,
   isStaleOccupantLoad,
@@ -31,6 +32,16 @@ import {
 } from './scene-occupants.js'
 import { StandInMarker } from './stand-in.js'
 import { DEFAULT_SAMPLE_VRM } from './default-sample-vrm.js'
+import { PhoneVrController, type PhoneVrStatus } from './phone-vr-controller.js'
+import {
+  defaultPhoneVrSettings,
+  type PhoneVrSettingsV1,
+} from './viewer-profiles.js'
+import {
+  emptyAvatarAssetLoadProgress,
+  type AvatarAssetLoadProgress,
+  type AvatarAssetLoadProgressListener,
+} from './load-progress.js'
 
 export interface SceneRoomOptions {
   background?: number
@@ -42,6 +53,9 @@ export interface SceneRoomOptions {
   onLabelClick?: (id: string) => void
   onLabelDblClick?: (id: string) => void
   gestureManifestUrl?: string
+  /** Local phone-VR viewer settings (smartphone cardboard-class glasses). */
+  phoneVrSettings?: PhoneVrSettingsV1
+  onPhoneVrStatus?: (status: PhoneVrStatus) => void
 }
 
 export interface SceneRoomAvatarConfig {
@@ -61,6 +75,8 @@ export interface SceneRoomOccupant {
   label: string
   slotIndex: number
   vrmUrl?: string | null
+  /** Catalog gate for `vrmUrl`; room peers only auto-load when verified (or platform default). */
+  validationStatus?: 'pending_admin' | 'rejected' | 'verified' | string | null
   mood?: string
   statusColor: number
   /** false keeps the spawn slot and draws a status-colored empty circle. */
@@ -149,6 +165,12 @@ export class SceneRoom {
   readonly sceneFx = new SceneObjectLayer()
   readonly eventLog = new SceneEventLog()
   private readonly actionListeners = new Set<CharacterActionListener>()
+  private readonly phoneVr: PhoneVrController
+  private readonly onPhoneVrStatus?: (status: PhoneVrStatus) => void
+  private loadProgress: AvatarAssetLoadProgress = emptyAvatarAssetLoadProgress()
+  private readonly loadProgressListeners = new Set<AvatarAssetLoadProgressListener>()
+  private readonly modelLoadRatios = new Map<string, number>()
+  private readonly gestureLoadRatios = new Map<string, number>()
 
   constructor(canvas: HTMLCanvasElement, options: SceneRoomOptions = {}) {
     this.canvas = canvas
@@ -158,6 +180,7 @@ export class SceneRoom {
     this.onLabelClick = options.onLabelClick
     this.onLabelDblClick = options.onLabelDblClick
     this.gestureManifestUrl = options.gestureManifestUrl
+    this.onPhoneVrStatus = options.onPhoneVrStatus
     if (!this.gestureManifestUrl) {
       this.logger.warn?.(
         '[character-kit] SceneRoom has no gestureManifestUrl — occupants stay in T-pose without an idle clip',
@@ -230,6 +253,26 @@ export class SceneRoom {
     }
 
     this.animationFrame = requestAnimationFrame(this.tick)
+    this.phoneVr = new PhoneVrController(
+      {
+        scene: this.scene,
+        camera: this.camera,
+        renderer: this.renderer,
+        setOrbitEnabled: (enabled) => {
+          if (this.controls) this.controls.enabled = enabled
+        },
+        setPointerLookEnabled: (enabled) => {
+          this.pointerLookEnabled = enabled
+          if (!enabled) this.onPointerLeave()
+        },
+        setLabelsVisible: (visible) => {
+          this.labelLayer.style.visibility = visible ? 'visible' : 'hidden'
+        },
+        onStatus: (status) => this.onPhoneVrStatus?.(status),
+        logger: this.logger,
+      },
+      options.phoneVrSettings ?? defaultPhoneVrSettings(),
+    )
     this.logger.info?.('[character-kit] SceneRoom ready')
   }
 
@@ -308,6 +351,19 @@ export class SceneRoom {
         continue
       }
       if (existing) this.removeAvatar(latest.id)
+      const download = mayAutoDownloadAvatarAsset({
+        url,
+        validationStatus: latest.validationStatus,
+      })
+      if (!download.allow) {
+        this.logger.warn?.('[character-kit] SceneRoom skipped unverified occupant VRM', {
+          id: latest.id,
+          url,
+          reason: download.reason,
+          validationStatus: latest.validationStatus ?? null,
+        })
+        continue
+      }
       try {
         await this.addAvatar({
           id: latest.id,
@@ -372,18 +428,23 @@ export class SceneRoom {
 
     const markProgress = (ratio: number) => {
       this.placeholders.get(config.id)?.marker.setLoadProgress(ratio)
+      this.setModelLoadRatio(config.id, ratio)
     }
 
     try {
       this.placeholders.get(config.id)?.marker.setLoadFailed(false)
       this.placeholders.get(config.id)?.marker.setLoadProgress(0)
-      await controller.loadVRM(config.vrmUrl || DEFAULT_SAMPLE_VRM, markProgress)
+      this.setModelLoadRatio(config.id, 0)
+      await controller.loadVRM(config.vrmUrl || DEFAULT_SAMPLE_VRM, markProgress, {
+        validationStatus: this.occupants.find((o) => o.id === config.id)?.validationStatus,
+      })
       if (this.isStaleAvatarAdd(config)) {
         dropUnregistered()
         throw new Error(this.disposed ? 'SceneRoom disposed' : OCCUPANT_LOAD_CANCELLED)
       }
     } catch (err) {
       this.placeholders.get(config.id)?.marker.setLoadProgress(null)
+      this.setModelLoadRatio(config.id, null)
       if (!isOccupantLoadCancelled(err)) {
         this.placeholders.get(config.id)?.marker.setLoadFailed(true)
       }
@@ -407,6 +468,7 @@ export class SceneRoom {
     controller.placeAt(pose.x, pose.z, pose.yawRad)
     controller.getRig().visible = true
     this.placeholders.get(config.id)?.marker.setLoadProgress(null)
+    this.setModelLoadRatio(config.id, null)
     this.placeholders.get(config.id)?.marker.setOccupied(true)
 
     // Same boot as CompanionHost: saccades + this occupant's mood + ambient idle.
@@ -464,11 +526,33 @@ export class SceneRoom {
   private kickGesturePack(id: string, controller: CharacterController): void {
     if (!this.gestureManifestUrl) return
     const packUrl = this.gestureManifestUrl
+    const packGate = mayAutoDownloadAvatarAsset({ url: packUrl })
+    if (!packGate.allow) {
+      this.logger.warn?.('[character-kit] SceneRoom skipped unverified gesture manifest', {
+        id,
+        url: packUrl,
+        reason: packGate.reason,
+      })
+      return
+    }
     void (async () => {
+      this.setGestureLoadRatio(id, 0)
       try {
-        const manifest = await fetchRewrittenManifest(packUrl)
+        const manifest = await fetchRewrittenManifest(packUrl, {
+          onSkip: (info) => {
+            this.logger.warn?.('[character-kit] SceneRoom skipped gesture asset', id, info)
+          },
+        })
         if (this.disposed || this.avatars.get(id)?.controller !== controller) return
-        await controller.loadGesturePack(manifest)
+        const loaded = await controller.loadGesturePack(manifest, {
+          onProgress: (ratio) => this.setGestureLoadRatio(id, ratio),
+        })
+        if (loaded.skipped.length) {
+          this.logger.warn?.('[character-kit] SceneRoom skipped gesture clips', {
+            id,
+            skipped: loaded.skipped,
+          })
+        }
         if (this.disposed || this.avatars.get(id)?.controller !== controller) return
         if (!controller.isIdlePlaying()) {
           controller.setIdleLoop('idle', { crossFade: 0 })
@@ -476,6 +560,8 @@ export class SceneRoom {
       } catch (err) {
         if (this.disposed || this.avatars.get(id)?.controller !== controller) return
         this.logger.warn?.('[character-kit] SceneRoom gesture pack failed', id, err)
+      } finally {
+        this.setGestureLoadRatio(id, null)
       }
     })()
   }
@@ -497,6 +583,8 @@ export class SceneRoom {
     this.sceneRegistry.unregister(id)
     this.sceneRegistry.unregister(`avatar:${id}`)
     this.avatars.delete(id)
+    this.setModelLoadRatio(id, null)
+    this.setGestureLoadRatio(id, null)
     this.layoutAll(false)
     this.logger.info?.('[character-kit] SceneRoom avatar removed', { id })
     return true
@@ -640,6 +728,44 @@ export class SceneRoom {
     return () => this.actionListeners.delete(listener)
   }
 
+  getLoadProgress(): AvatarAssetLoadProgress {
+    return { ...this.loadProgress }
+  }
+
+  onLoadProgress(listener: AvatarAssetLoadProgressListener): () => void {
+    this.loadProgressListeners.add(listener)
+    listener(this.getLoadProgress())
+    return () => {
+      this.loadProgressListeners.delete(listener)
+    }
+  }
+
+  private publishLoadProgress(): void {
+    const model = aggregateLoadRatio(this.modelLoadRatios)
+    const gestures = aggregateLoadRatio(this.gestureLoadRatios)
+    this.loadProgress = { model, gestures }
+    const snapshot = this.getLoadProgress()
+    for (const listener of this.loadProgressListeners) {
+      try {
+        listener(snapshot)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  private setModelLoadRatio(id: string, ratio: number | null): void {
+    if (ratio == null) this.modelLoadRatios.delete(id)
+    else this.modelLoadRatios.set(id, ratio)
+    this.publishLoadProgress()
+  }
+
+  private setGestureLoadRatio(id: string, ratio: number | null): void {
+    if (ratio == null) this.gestureLoadRatios.delete(id)
+    else this.gestureLoadRatios.set(id, ratio)
+    this.publishLoadProgress()
+  }
+
   async playInlineTags(
     id: string,
     text: string,
@@ -762,6 +888,23 @@ export class SceneRoom {
     this.logger.info?.('[character-kit] SceneRoom pointer look', enabled)
   }
 
+  /** Smartphone VR glasses mode (stereo + IMU / WebXR). Same enter/exit rails as portal play-webxr. */
+  getPhoneVr(): PhoneVrController {
+    return this.phoneVr
+  }
+
+  async enterPhoneVr(): Promise<PhoneVrStatus> {
+    return this.phoneVr.enter()
+  }
+
+  async exitPhoneVr(): Promise<PhoneVrStatus> {
+    return this.phoneVr.exit()
+  }
+
+  isPhoneVrActive(): boolean {
+    return this.phoneVr.getStatus().active
+  }
+
   resize(): void {
     const width = this.canvas.clientWidth || 1
     const height = this.canvas.clientHeight || 1
@@ -769,6 +912,7 @@ export class SceneRoom {
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(width, height, false)
     this.labelRenderer.setSize(width, height)
+    this.phoneVr.resize(width, height)
   }
 
   dispose(): void {
@@ -776,6 +920,7 @@ export class SceneRoom {
     this.disposed = true
     this.occupantSyncPending = false
     cancelAnimationFrame(this.animationFrame)
+    this.phoneVr.dispose()
     window.removeEventListener('pointermove', this.onPointerMove)
     window.removeEventListener('blur', this.onPointerLeave)
     document.documentElement.removeEventListener('mouseleave', this.onPointerLeave)
@@ -1067,7 +1212,9 @@ export class SceneRoom {
     try {
       const delta = this.clock.getDelta()
 
-      this.controls?.update()
+      if (!this.phoneVr.getStatus().active) {
+        this.controls?.update()
+      }
 
       let cameraYaw = 0
       try {
@@ -1097,12 +1244,32 @@ export class SceneRoom {
       this.logger.error?.('[character-kit] SceneRoom tick', err)
     }
     try {
-      this.renderer.render(this.scene, this.camera)
-      this.labelRenderer.render(this.scene, this.camera)
+      if (this.phoneVr.renderFrame()) {
+        /* stereo path rendered */
+      } else {
+        this.renderer.render(this.scene, this.camera)
+        this.labelRenderer.render(this.scene, this.camera)
+      }
     } catch (err) {
       this.logger.error?.('[character-kit] SceneRoom render', err)
     }
   }
+}
+
+/** Prefer determinate min; indeterminate (-1) wins if any in-flight load lacks Content-Length. */
+function aggregateLoadRatio(ratios: Map<string, number>): number | null {
+  if (!ratios.size) return null
+  let hasIndeterminate = false
+  let min = 1
+  for (const ratio of ratios.values()) {
+    if (ratio < 0) {
+      hasIndeterminate = true
+      continue
+    }
+    min = Math.min(min, ratio)
+  }
+  if (hasIndeterminate) return -1
+  return min
 }
 
 export { layoutSpawnSlots, facingYawRad } from './spawn-slots.js'

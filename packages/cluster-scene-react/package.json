@@ -1,0 +1,47 @@
+{
+  "name": "@nexus/cluster-scene-react",
+  "version": "0.1.0",
+  "description": "Cluster list + scene room viewer React widgets (scene-client + character-react)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./list": {
+      "types": "./dist/list.d.ts",
+      "import": "./dist/list.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nexus/scene-client": "file:../../../../anx-npm-modules/packages/scene-client"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "@nexus/character-react": "workspace:*",
+    "@nexus/character-kit": "workspace:*",
+    "@nexus/robots-kit": "workspace:*",
+    "@nexus/scene-kit": "workspace:*"
+  },
+  "devDependencies": {
+    "@nexus/character-react": "workspace:*",
+    "@nexus/character-kit": "workspace:*",
+    "@nexus/robots-kit": "workspace:*",
+    "@nexus/scene-kit": "workspace:*",
+    "@nexus/scene-client": "file:../../../../anx-npm-modules/packages/scene-client",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.9.2"
+  }
+}

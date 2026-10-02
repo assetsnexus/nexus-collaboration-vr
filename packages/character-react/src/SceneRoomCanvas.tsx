@@ -1,0 +1,110 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  SceneRoom,
+  emptyAvatarAssetLoadProgress,
+  type AvatarAssetLoadProgress,
+  type SceneRoomOccupant,
+  type SceneRoomOptions,
+  type PhoneVrStatus,
+} from '@nexus/character-kit'
+import { AvatarLoadProgressBars } from './AvatarLoadProgressBars.js'
+import { ensureAvatarAssetCacheBridge } from './ensureAvatarAssetCacheBridge.js'
+import { PhoneVrPanel } from './PhoneVrPanel.js'
+
+export type SceneRoomCanvasProps = {
+  occupants: SceneRoomOccupant[]
+  gestureManifestUrl?: string
+  className?: string
+  style?: React.CSSProperties
+  roomOptions?: Omit<SceneRoomOptions, 'logger' | 'onPhoneVrStatus'>
+  onRoomReady?: (room: SceneRoom | null) => void
+  /** Show smartphone VR glasses controls (default true). */
+  phoneVrEnabled?: boolean
+  phoneVrScopeKey?: string
+  onPhoneVrStatus?: (status: PhoneVrStatus) => void
+  onVrShellRequest?: (action: 'lockLandscape' | 'unlockOrientation') => void
+}
+
+export function SceneRoomCanvas({
+  occupants,
+  gestureManifestUrl,
+  className,
+  style,
+  roomOptions,
+  onRoomReady,
+  phoneVrEnabled = true,
+  phoneVrScopeKey = 'default',
+  onPhoneVrStatus,
+  onVrShellRequest,
+}: SceneRoomCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const roomRef = useRef<SceneRoom | null>(null)
+  const [room, setRoom] = useState<SceneRoom | null>(null)
+  const [loadProgress, setLoadProgress] = useState<AvatarAssetLoadProgress>(
+    emptyAvatarAssetLoadProgress(),
+  )
+  const onPhoneVrStatusRef = useRef(onPhoneVrStatus)
+  onPhoneVrStatusRef.current = onPhoneVrStatus
+
+  useEffect(() => {
+    ensureAvatarAssetCacheBridge()
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const next = new SceneRoom(canvas, {
+      orbitControls: true,
+      pointerLook: true,
+      background: 0x12171c,
+      gestureManifestUrl,
+      onPhoneVrStatus: (status) => onPhoneVrStatusRef.current?.(status),
+      ...roomOptions,
+    })
+    roomRef.current = next
+    setRoom(next)
+    const offProgress = next.onLoadProgress(setLoadProgress)
+    onRoomReady?.(next)
+    return () => {
+      offProgress()
+      next.dispose()
+      roomRef.current = null
+      setRoom(null)
+      setLoadProgress(emptyAvatarAssetLoadProgress())
+      onRoomReady?.(null)
+    }
+  }, [gestureManifestUrl, roomOptions, onRoomReady])
+
+  useEffect(() => {
+    const r = roomRef.current
+    if (!r) return
+    void r.setOccupants(occupants)
+  }, [occupants])
+
+  const shellRequest = useCallback(
+    (action: 'lockLandscape' | 'unlockOrientation') => {
+      onVrShellRequest?.(action)
+    },
+    [onVrShellRequest],
+  )
+
+  const canvasStyle: React.CSSProperties = {
+    width: '100%',
+    height: 480,
+    display: 'block',
+    ...style,
+  }
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <canvas ref={canvasRef} className={className} style={canvasStyle} aria-label="3D scene room" />
+      <AvatarLoadProgressBars progress={loadProgress} />
+      {phoneVrEnabled ? (
+        <div style={{ position: 'absolute', left: 8, top: 36, zIndex: 3 }}>
+          <PhoneVrPanel
+            room={room}
+            scopeKey={phoneVrScopeKey}
+            onShellRequest={shellRequest}
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+}
