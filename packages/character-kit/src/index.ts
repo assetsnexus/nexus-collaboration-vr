@@ -48,6 +48,7 @@ export {
   setAvatarAssetCacheBackend,
   avatarAssetCacheKey,
   shouldStoreAvatarAsset,
+  shouldPersistAssetUrl,
   isAvatarAssetCacheEntryFresh,
   canonicalizePublicAssetUrl,
   CHARACTER_ASSET_CACHE,
