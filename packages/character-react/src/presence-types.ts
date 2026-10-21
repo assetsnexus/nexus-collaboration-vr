@@ -16,6 +16,11 @@ export type ParticipantPresenceV1 = {
   }
   fishVoiceId?: string
   voiceId?: string
+  /**
+   * Plan Part C1 embodiment profile (vrmUrl, routines, face caps, zen…).
+   * Tolerant: absent means "use current behaviour".
+   */
+  embodiment?: Record<string, unknown>
   settings?: {
     lip_sync_enabled?: boolean
     status_motions?: Record<string, string>

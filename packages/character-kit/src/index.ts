@@ -270,6 +270,29 @@ export type {
   TimedInlineCue,
 } from './inline-tags.js'
 export {
+  parseEmbodimentProfile,
+  seedPresenceMoodOverrides,
+  resolveEmbodimentFace,
+  resolveEmbodimentRoutine,
+  resolveEmbodimentMood,
+  applyEmbodimentToSteps,
+  applyGestureAliasesToText,
+  snapshotPresenceMoods,
+  restorePresenceMoods,
+  HAS_EMBODIMENT_ROUTINES,
+} from './embodiment-profile.js'
+export type {
+  EmbodimentProfileV1,
+  EmbodimentFace,
+  EmbodimentFaceProfileV1,
+  EmbodimentRoutinesV1,
+  EmbodimentRoutineStep,
+  EmbodimentRoutineName,
+  EmbodimentSpeakingV1,
+  EmbodimentIdleV1,
+  ResolvedEmbodimentFace,
+} from './embodiment-profile.js'
+export {
   CLOTHES_NONE_ID,
   CLOTHES_DEFAULT_ID,
   CLOTHES_CATEGORY_ORDER,

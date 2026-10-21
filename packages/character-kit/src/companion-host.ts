@@ -12,11 +12,24 @@ import {
   defaultInlineCatalog,
   parseInlineTags,
   type InlineTagCatalog,
+  type InlineSequenceStep,
   type ParsedInlineTags,
 } from './inline-tags.js'
 import { DEFAULT_GAZE_LIMITS, type GazeLimits } from './gaze.js'
 import type { MoveInput } from './locomotion.js'
 import type { WalkTrailOptions } from './walk-trail.js'
+import {
+  applyEmbodimentToSteps,
+  applyGestureAliasesToText,
+  parseEmbodimentProfile,
+  resolveEmbodimentFace,
+  resolveEmbodimentMood,
+  resolveEmbodimentRoutine,
+  seedPresenceMoodOverrides,
+  type EmbodimentFace,
+  type EmbodimentProfileV1,
+  type EmbodimentRoutineName,
+} from './embodiment-profile.js'
 import {
   InteractionAck,
   type InteractionAckOptions,
@@ -79,6 +92,9 @@ export class CompanionHost {
   private lastUserLogAt: Record<string, number> = {}
   private loadProgress: AvatarAssetLoadProgress = emptyAvatarAssetLoadProgress()
   private readonly loadProgressListeners = new Set<AvatarAssetLoadProgressListener>()
+  private embodiment: EmbodimentProfileV1 | null = null
+  private embodimentFace: EmbodimentFace = 'owner'
+  private seededMoodIds: string[] = []
 
   constructor(canvas: HTMLCanvasElement, options: CompanionHostOptions = {}) {
     this.logger = options.logger ?? console
@@ -439,6 +455,123 @@ export class CompanionHost {
     } finally {
       this.director.endSpeechBeat(gen)
     }
+  }
+
+  /**
+   * Install (or clear) the agent embodiment profile (plan Part C1).
+   *
+   * Seeds idle mood overrides into PRESENCE_MOODS, applies the face mood and
+   * remembers the viewer face so `playEmbodimentInlineTags` / routines stay
+   * within the public/owner intensity caps. Returns the ids changed.
+   */
+  setEmbodiment(
+    profile: EmbodimentProfileV1 | Record<string, unknown> | null | undefined,
+    opts: { face?: EmbodimentFace } = {},
+  ): { moods: string[]; mood: string | null } {
+    this.embodiment = parseEmbodimentProfile(profile ?? null)
+    if (opts.face === 'public' || opts.face === 'owner') this.embodimentFace = opts.face
+    const moodOverrides = this.embodiment?.idle?.moodOverrides
+    const moods = moodOverrides ? seedPresenceMoodOverrides(moodOverrides) : []
+    this.seededMoodIds = moods
+    const mood = resolveEmbodimentMood(this.embodiment, this.embodimentFace)
+    if (mood) this.setMood(mood, 'user', 'embodiment')
+    return { moods, mood }
+  }
+
+  getEmbodiment(): EmbodimentProfileV1 | null {
+    return this.embodiment
+  }
+
+  /** Switch the viewer face (public vs owner). Re-applies the face mood. */
+  setEmbodimentFace(face: EmbodimentFace): void {
+    this.embodimentFace = face
+    const mood = resolveEmbodimentMood(this.embodiment, face)
+    if (mood) this.setMood(mood, 'user', 'embodiment')
+  }
+
+  getEmbodimentFace(): EmbodimentFace {
+    return this.embodimentFace
+  }
+
+  /** Because PRESENCE_MOODS is a shared catalog, report what we seeded. */
+  getSeededMoodIds(): string[] {
+    return [...this.seededMoodIds]
+  }
+
+  /**
+   * Play a named embodiment routine (greeting / farewell / onListen / onThink)
+   * with face caps and Zen quiet mode applied.
+   */
+  async playEmbodimentRoutine(
+    name: EmbodimentRoutineName,
+    opts: { source?: CharacterActionSource; face?: EmbodimentFace } = {},
+  ): Promise<boolean> {
+    const steps = resolveEmbodimentRoutine(this.embodiment, name)
+    if (!steps.length) return false
+    const face = opts.face ?? this.embodimentFace
+    const resolved = resolveEmbodimentFace(this.embodiment, face)
+    const speaking = this.embodiment?.speaking
+    const emotionScale = (speaking?.emotionIntensityScale ?? 1) * 1
+    const capped = applyEmbodimentToSteps(steps, {
+      emotionScale,
+      cap: resolved.cap,
+      dropGestures: resolved.preferFaceOnly,
+    })
+    if (!capped.length) return false
+    await this.playTimedSteps(capped, { source: opts.source ?? 'routine' })
+    return true
+  }
+
+  /**
+   * Chat-surface entry point: parse inline tags from assistant text AND apply
+   * the embodiment face caps / Zen mode before playing. Falls back to
+   * `playInlineTags` behaviour when no embodiment profile is installed.
+   */
+  async playEmbodimentInlineTags(
+    text: string,
+    opts: {
+      enabled?: boolean
+      source?: CharacterActionSource
+      locomotionOnly?: boolean
+      face?: EmbodimentFace
+    } = {},
+  ): Promise<ParsedInlineTags> {
+    if (!this.embodiment) return this.playInlineTags(text, opts)
+    const enabled = opts.enabled !== false
+    const source = opts.source ?? 'tag'
+    const face = opts.face ?? this.embodimentFace
+    const resolved = resolveEmbodimentFace(this.embodiment, face)
+    const speaking = this.embodiment.speaking
+    const locomotionOps = new Set(['walk', 'approach', 'teleport', 'turn', 'jump', 'turn_to'])
+    const sourceText = applyGestureAliasesToText(text, this.embodiment.gestureAliases)
+    const parsed = parseInlineTags(sourceText, this.inlineTagCatalog(), { enabled })
+    if (!enabled) return parsed
+
+    const dropGestures = resolved.preferFaceOnly || resolved.gestureScale <= 0
+    const shape = (steps: InlineSequenceStep[]) =>
+      applyEmbodimentToSteps(
+        opts.locomotionOnly ? steps.filter((s) => locomotionOps.has(String(s.op))) : steps,
+        {
+          emotionScale: speaking?.emotionIntensityScale ?? 1,
+          cap: resolved.cap,
+          dropGestures: dropGestures && !opts.locomotionOnly,
+        },
+      )
+
+    const withSpeech = shape(parsed.withSpeech)
+    const afterTts = opts.locomotionOnly ? [] : shape(parsed.afterTts)
+    if (!withSpeech.length && !afterTts.length) return parsed
+
+    const gen = this.director.beginSpeechBeat()
+    try {
+      if (withSpeech.length) await this.director.runSequence(withSpeech, gen, source)
+      if (afterTts.length && this.director.isCurrent(gen)) {
+        await this.director.runSequence(afterTts, gen, source)
+      }
+    } finally {
+      this.director.endSpeechBeat(gen)
+    }
+    return parsed
   }
 
   pausePresence(reason = 'agent_status'): void {

@@ -16,6 +16,13 @@ export type CompanionCanvasProps = {
   mood?: string
   clothes?: CompanionClothesInput
   lipSyncEnabled?: boolean
+  /**
+   * Plan Part C1: full embodiment profile (routines, face caps, zen, idle
+   * mood overrides). When omitted, the host keeps its current behaviour.
+   */
+  embodiment?: Record<string, unknown> | null
+  /** Which face is being embodied: public cap vs owner. Default 'owner'. */
+  embodimentFace?: 'public' | 'owner'
   className?: string
   style?: React.CSSProperties
   hostOptions?: Omit<CompanionHostOptions, 'logger'>
@@ -31,6 +38,8 @@ export function CompanionCanvas({
   mood = 'neutral',
   clothes,
   lipSyncEnabled = true,
+  embodiment,
+  embodimentFace = 'owner',
   className,
   style,
   hostOptions,
@@ -42,6 +51,7 @@ export function CompanionCanvas({
   const hostRef = useRef<CompanionHost | null>(null)
   const onHostReadyRef = useRef(onHostReady)
   onHostReadyRef.current = onHostReady
+  const [hostTick, setHostTick] = useState(0)
   const [loadProgress, setLoadProgress] = useState<AvatarAssetLoadProgress>(
     emptyAvatarAssetLoadProgress(),
   )
@@ -57,6 +67,7 @@ export function CompanionCanvas({
       ...hostOptions,
     })
     hostRef.current = host
+    setHostTick((n) => n + 1)
     const offProgress = host.onLoadProgress(setLoadProgress)
     onHostReadyRef.current?.(host)
     return () => {
@@ -87,6 +98,14 @@ export function CompanionCanvas({
     host.setMood(mood, 'user', 'prop')
   }, [mood])
 
+  // Install the embodiment profile after the host exists so a host that is
+  // ready before the profile arrives still gets it (and vice versa).
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    host.setEmbodiment(embodiment ?? null, { face: embodimentFace })
+  }, [embodiment, embodimentFace, hostTick])
+
   useEffect(() => {
     if (!lipSyncEnabled) {
       hostRef.current?.stopLipSync()
@@ -111,7 +130,13 @@ export function CompanionCanvas({
 /** Map ParticipantPresenceV1 into CompanionCanvas props. */
 export function presenceToCompanionProps(p: ParticipantPresenceV1): Pick<
   CompanionCanvasProps,
-  'vrmUrl' | 'gestureManifestUrl' | 'mood' | 'clothes' | 'lipSyncEnabled' | 'validationStatus'
+  | 'vrmUrl'
+  | 'gestureManifestUrl'
+  | 'mood'
+  | 'clothes'
+  | 'lipSyncEnabled'
+  | 'validationStatus'
+  | 'embodiment'
 > {
   return {
     vrmUrl: p.vrmUrl,
@@ -120,5 +145,6 @@ export function presenceToCompanionProps(p: ParticipantPresenceV1): Pick<
     clothes: p.clothes,
     lipSyncEnabled: p.settings?.lip_sync_enabled !== false,
     validationStatus: p.vrmValidationStatus,
+    embodiment: p.embodiment ?? null,
   }
 }

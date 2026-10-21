@@ -18,6 +18,26 @@ declare module '@nexus/character-kit' {
     logger?: Pick<Console, 'info' | 'warn' | 'error'>
   }
 
+  export type EmbodimentFace = 'public' | 'owner'
+
+  export type EmbodimentRoutineName = 'greeting' | 'farewell' | 'onListen' | 'onThink'
+
+  export type EmbodimentProfileV1 = {
+    v?: number
+    vrmUrl?: string | null
+    vrmAssetId?: string | null
+    gestureManifestUrl?: string | null
+    defaultMood?: string | null
+    lipSyncEnabled?: boolean
+    expressionMap?: Record<string, string>
+    gestureAliases?: Record<string, string>
+    idle?: { moodOverrides?: Record<string, Record<string, unknown>> }
+    routines?: Partial<Record<EmbodimentRoutineName, Array<string | Record<string, unknown>>>>
+    speaking?: { emotionIntensityScale?: number; gestureIntensityScale?: number }
+    faces?: Partial<Record<EmbodimentFace, Record<string, unknown>>>
+    zen?: { preferFaceOnly?: boolean }
+  }
+
   export type AvatarAssetLoadProgress = {
     model: number | null
     gestures: number | null
@@ -89,6 +109,34 @@ declare module '@nexus/character-kit' {
     stopLipSync(): void
     getLoadProgress(): AvatarAssetLoadProgress
     onLoadProgress(listener: AvatarAssetLoadProgressListener): () => void
+    /** Plan Part C1: install / clear the embodiment profile. */
+    setEmbodiment(
+      profile: EmbodimentProfileV1 | Record<string, unknown> | null | undefined,
+      opts?: { face?: EmbodimentFace },
+    ): { moods: string[]; mood: string | null }
+    getEmbodiment(): EmbodimentProfileV1 | null
+    setEmbodimentFace(face: EmbodimentFace): void
+    getEmbodimentFace(): EmbodimentFace
+    getSeededMoodIds(): string[]
+    playEmbodimentRoutine(
+      name: EmbodimentRoutineName,
+      opts?: { source?: string; face?: EmbodimentFace },
+    ): Promise<boolean>
+    playEmbodimentInlineTags(
+      text: string,
+      opts?: {
+        enabled?: boolean
+        source?: string
+        locomotionOnly?: boolean
+        face?: EmbodimentFace
+      },
+    ): Promise<{ displayText: string; ttsText: string }>
+    playInlineTags(
+      text: string,
+      opts?: { enabled?: boolean; source?: string; locomotionOnly?: boolean },
+    ): Promise<{ displayText: string; ttsText: string }>
+    pausePresence(reason?: string): void
+    resumePresence(): void
     dispose(): void
   }
 
