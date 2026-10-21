@@ -6,6 +6,7 @@ declare module '@nexus/character-react' {
     style?: React.CSSProperties
     phoneVrEnabled?: boolean
     phoneVrScopeKey?: string
+    onRoomReady?: (room: import('@nexus/character-kit').SceneRoom | null) => void
     onPhoneVrStatus?: (status: unknown) => void
     onVrShellRequest?: (action: 'lockLandscape' | 'unlockOrientation') => void
   }): JSX.Element

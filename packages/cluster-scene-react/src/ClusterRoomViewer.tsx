@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { SceneClient } from '@nexus/scene-client'
 import { SceneRoomCanvas } from '@nexus/character-react'
+import type { SceneRoom } from '@nexus/character-kit'
 import type { SceneRoomOccupant } from './scene-occupant-ref.js'
 import { applyRobotJointsFromSceneFrame } from './robots-bridge.js'
 import type { SceneGraphRef } from './scene-graph-ref.js'
@@ -20,6 +21,11 @@ export type ClusterRoomViewerProps = {
   /** Smartphone VR glasses mode (default on). */
   phoneVrEnabled?: boolean
   onVrShellRequest?: (action: 'lockLandscape' | 'unlockOrientation') => void
+  /**
+   * Receives the live {@link SceneRoom} once the 3D stage is ready (and `null` on
+   * teardown), so a host can drive per-avatar lip-sync from a voice session.
+   */
+  onRoomReady?: (room: SceneRoom | null) => void
 }
 
 export function ClusterRoomViewer({
@@ -32,6 +38,7 @@ export function ClusterRoomViewer({
   sceneGraph,
   phoneVrEnabled = true,
   onVrShellRequest,
+  onRoomReady,
 }: ClusterRoomViewerProps) {
   const [client] = useState(() => sceneClientProp ?? createSceneClient?.() ?? null)
   const [jointDebug, setJointDebug] = useState<Record<string, Record<string, number>>>({})
@@ -94,6 +101,7 @@ export function ClusterRoomViewer({
         gestureManifestUrl={gestureManifestUrl}
         phoneVrEnabled={phoneVrEnabled}
         phoneVrScopeKey={`cluster:${roomId}`}
+        onRoomReady={onRoomReady}
         onVrShellRequest={onVrShellRequest}
       />
       {!robotSceneLayer || !sceneGraph ? (
