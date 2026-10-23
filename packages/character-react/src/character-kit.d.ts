@@ -47,6 +47,49 @@ declare module '@nexus/character-kit' {
 
   export function emptyAvatarAssetLoadProgress(): AvatarAssetLoadProgress
 
+  /** Action-feed source union (motion feed). */
+  export type CharacterActionSource =
+    | 'agent'
+    | 'user'
+    | 'tag'
+    | 'routine'
+    | 'status'
+    | 'cancel'
+    | 'session'
+    | 'tool'
+    | string
+
+  export type CharacterActionEvent = {
+    agent: string
+    op: string
+    label: string
+    source: CharacterActionSource
+    detail?: string
+    target?: string
+    at: number
+    status?: string
+    durationMs?: number
+    groupId?: number
+    generation?: number
+  }
+
+  /** One clip currently loaded on a character (VRMA or procedural). */
+  export type LoadedGestureInfo = {
+    id: string
+    durationMs: number | null
+    loop: boolean
+    overlay: boolean
+    description?: string
+  }
+
+  export type ToolResult = {
+    ok: boolean
+    name: string
+    message: string
+    data?: Record<string, unknown>
+  }
+
+
   export type NativeAvatarCacheRequest =
     | {
         type: 'cachePut'
@@ -239,12 +282,61 @@ declare module '@nexus/character-kit' {
     logger?: Pick<Console, 'info' | 'warn' | 'error'>
     phoneVrSettings?: PhoneVrSettingsV1
     onPhoneVrStatus?: (status: PhoneVrStatus) => void
+    /** Single-occupant companion stage: no nametags/status circles. */
+    soloStage?: boolean
+  }
+
+  export type SceneRoomAvatarHandle = {
+    id: string
+    controller: {
+      speakWithLipSync: CompanionHost['speakWithLipSync']
+      stopLipSync: () => void
+      ensureLipSync: (ctx?: AudioContext) => Promise<unknown>
+      listGestures: () => string[]
+      listLoadedGestures: () => LoadedGestureInfo[]
+      isIdlePlaying: () => boolean
+    }
+    director: {
+      getPresence: () => { setMood: (mood: string) => boolean }
+      pausePresence: (reason?: string) => void
+      resumePresence: () => void
+      pushAction: (
+        op: string,
+        label: string,
+        source: string,
+        detail?: string,
+        target?: string,
+      ) => void
+    }
+    setMood: (mood: string, intensity?: number) => void
+    playGesture: (gestureId: string, sceneTarget?: string) => Promise<boolean>
+    faceToward: (x: number, z: number) => void
+    worldPosition: () => { x: number; y: number; z: number }
   }
 
   export class SceneRoom {
     constructor(canvas: HTMLCanvasElement, options?: SceneRoomOptions)
     setOccupants(occupants: SceneRoomOccupant[]): Promise<void>
-    getAvatar(id: string): { controller: { speakWithLipSync: CompanionHost['speakWithLipSync']; stopLipSync: () => void } } | null
+    getAvatar(id: string): SceneRoomAvatarHandle | null
+    runToolCall(id: string, name: string, args?: Record<string, unknown>): Promise<ToolResult>
+    applyToolCall(id: string, name: string, args: Record<string, unknown>): ToolResult
+    setAvatarMood(id: string, mood: string, source?: string, detail?: string): boolean
+    playAvatarGesture(
+      id: string,
+      gestureId: string,
+      opts?: { loop?: boolean; timeScale?: number; source?: string; target?: string },
+    ): Promise<boolean>
+    listAvatarGestures(id: string): string[]
+    listLoadedAvatarGestures(id: string): LoadedGestureInfo[]
+    isAvatarIdlePlaying(id: string): boolean
+    onAction(listener: (ev: CharacterActionEvent) => void): () => void
+    speakWithLipSync(id: string, mediaStream: MediaStream, audioContext?: AudioContext): Promise<void>
+    stopLipSync(id?: string): void
+    playInlineTags(
+      id: string,
+      text: string,
+      opts?: { enabled?: boolean; source?: string; locomotionOnly?: boolean },
+    ): Promise<{ displayText: string; ttsText: string }>
     getPhoneVr(): PhoneVrController
     enterPhoneVr(): Promise<PhoneVrStatus>
     exitPhoneVr(): Promise<PhoneVrStatus>

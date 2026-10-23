@@ -21,10 +21,12 @@
     "react": ">=18",
     "react-dom": ">=18",
     "three": ">=0.160.0",
-    "@nexus/character-kit": "workspace:*"
+    "@nexus/character-kit": "workspace:*",
+    "@nexus/character-ui-kit": "workspace:*"
   },
   "devDependencies": {
     "@nexus/character-kit": "workspace:*",
+    "@nexus/character-ui-kit": "workspace:*",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/three": "^0.180.0",

@@ -4,9 +4,12 @@ import { AnimationDirector, type DirectorOptions } from './animation-director.js
 import type { CharacterActionEvent, CharacterActionSource } from './action-feed.js'
 import type { ClothesSpec } from './clothes.js'
 import type { ClothesOverlayPiece } from './clothes-transform.js'
-import type { CharacterOptions, GestureManifest, LoadedGestureInfo } from './types.js'
+import type { CharacterOptions, GestureManifest, LoadedGestureInfo, ToolResult } from './types.js'
 import type { PresenceMoodId } from './presence-moods.js'
 import { listPresenceMoods } from './presence-moods.js'
+import {
+  resolveCharacterToolName,
+} from './tools.js'
 import { listLogicalGestureIds } from './gesture-variants.js'
 import {
   defaultInlineCatalog,
@@ -43,6 +46,14 @@ import {
   type AvatarAssetLoadProgress,
   type AvatarAssetLoadProgressListener,
 } from './load-progress.js'
+import { coercePresenceMoodId } from './presence-moods.js'
+
+/**
+ * Where the gesture catalogue came from. `procedural` means no manifest was
+ * provided (or it failed) and the built-in fallback clips are driving presence —
+ * the avatar is still lively, but there are no authored VRMA gestures.
+ */
+export type GesturePackStatus = 'loading' | 'loaded' | 'procedural' | 'failed'
 
 export type CompanionClothesInput = {
   id?: string
@@ -95,6 +106,8 @@ export class CompanionHost {
   private embodiment: EmbodimentProfileV1 | null = null
   private embodimentFace: EmbodimentFace = 'owner'
   private seededMoodIds: string[] = []
+  private gesturePackStatus: GesturePackStatus = 'procedural'
+  private readonly gesturePackStatusListeners = new Set<(status: GesturePackStatus) => void>()
 
   constructor(canvas: HTMLCanvasElement, options: CompanionHostOptions = {}) {
     this.logger = options.logger ?? console
@@ -257,8 +270,14 @@ export class CompanionHost {
     this.setLoadProgress({ model: null })
 
     this.controller.setSaccadesEnabled(true)
+    this.controller.setIdlePulseEnabled(true)
+    this.controller.setRestPulseEnabled(true)
     this.director.setController(this.controller)
-    this.getPresence().setMood(mood)
+    // `setMood` returns false for an unchanged mood, so seed the neutral default
+    // through the same coercing path; an unknown inbound mood no longer sticks.
+    this.getPresence().setMood(coercePresenceMoodId(mood) ?? 'neutral')
+    // Start ambient presence immediately: without a VRMA pack this is what keeps
+    // the rig off the bind pose (procedural micro/medium/long beats).
     this.director.scheduleThinking()
     this.interactionAck.setReady(true)
     if (!this.controller.isIdlePlaying()) {
@@ -272,6 +291,7 @@ export class CompanionHost {
     if (opts.gestureManifestUrl) {
       const packUrl = opts.gestureManifestUrl
       const previewUnverified = opts.previewUnverified === true
+      this.setGesturePackStatus('loading')
       this.setLoadProgress({ gestures: 0 })
       void (async () => {
         try {
@@ -292,16 +312,75 @@ export class CompanionHost {
             })
           }
           if (this.disposed) return
+          // A pack that loaded *some* clips is a success even if a few were
+          // skipped; only an all-skipped pack degrades to procedural.
+          this.setGesturePackStatus('loaded')
           if (!this.controller.isIdlePlaying()) {
             this.controller.setIdleLoop('idle', { crossFade: 0 })
           }
         } catch (err) {
           if (this.disposed) return
+          // Non-fatal: procedural fallbacks already carry the presence. Keep the
+          // avatar lively instead of leaving it frozen on the rest pose.
+          this.setGesturePackStatus('failed')
           this.logger.warn?.('[character-kit] CompanionHost gesture pack failed', err)
+          if (!this.controller.isIdlePlaying()) {
+            this.controller.setIdleLoop('idle', { crossFade: 0 })
+          }
+          this.director.scheduleThinking()
         } finally {
           if (!this.disposed) this.setLoadProgress({ gestures: null })
         }
       })()
+    } else {
+      // No manifest at all: procedural clips + ambient presence are the whole
+      // show. Log it so a "why is nothing waving" report is answered by the log.
+      this.setGesturePackStatus('procedural')
+      this.logger.info?.(
+        '[character-kit] no gesture manifest — using procedural fallbacks + ambient presence',
+      )
+    }
+  }
+
+  /** How the current gesture catalogue was sourced (procedural vs manifest). */
+  getGesturePackStatus(): GesturePackStatus {
+    return this.gesturePackStatus
+  }
+
+  onGesturePackStatus(listener: (status: GesturePackStatus) => void): () => void {
+    this.gesturePackStatusListeners.add(listener)
+    listener(this.gesturePackStatus)
+    return () => {
+      this.gesturePackStatusListeners.delete(listener)
+    }
+  }
+
+  /**
+   * Execute one character tool call (character_* / locomotion / scene_*)
+   * through the AnimationDirector: it dispatches to the controller, records the
+   * action on the motion feed, applies generation cancellation, and awaits
+   * locomotion arrival so the model gets the real result. This is the single
+   * entry point the desktop client-tool pack uses, so the routing lives here
+   * rather than being re-derived per host.
+   */
+  async runToolCall(name: string, args: Record<string, unknown> = {}): Promise<ToolResult> {
+    return this.director.runToolCall(resolveCharacterToolName(String(name ?? '')), args)
+  }
+
+  /** Synchronous transform-only path (no timeline / action-feed entry). */
+  applyToolCall(name: string, args: Record<string, unknown> = {}): ToolResult {
+    return this.controller.applyToolCall(resolveCharacterToolName(String(name ?? '')), args)
+  }
+
+  private setGesturePackStatus(status: GesturePackStatus): void {
+    if (this.gesturePackStatus === status) return
+    this.gesturePackStatus = status
+    for (const listener of this.gesturePackStatusListeners) {
+      try {
+        listener(status)
+      } catch {
+        /* ignore listener errors */
+      }
     }
   }
 
@@ -310,8 +389,13 @@ export class CompanionHost {
   }
 
   setMood(mood: string, source: CharacterActionSource = 'user', detail = 'config'): boolean {
-    const ok = this.getPresence().setMood(mood)
-    if (ok) this.director.pushAction('mood', mood, source, detail)
+    const coerced = coercePresenceMoodId(mood)
+    if (!coerced) {
+      this.logger.warn?.('[character-kit] unknown mood', mood)
+      return false
+    }
+    const ok = this.getPresence().setMood(coerced)
+    if (ok) this.director.pushAction('mood', coerced, source, detail)
     return ok
   }
 

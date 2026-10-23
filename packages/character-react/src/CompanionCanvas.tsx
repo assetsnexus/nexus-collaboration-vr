@@ -112,15 +112,25 @@ export function CompanionCanvas({
     }
   }, [lipSyncEnabled])
 
+  // Fill the host pane by default; a caller can still pin a size via `style`
+  // (e.g. the collapsed chat header that reserves a small strip).
   const canvasStyle: React.CSSProperties = {
     width: '100%',
-    height: 420,
+    height: '100%',
     display: 'block',
     ...style,
   }
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: canvasStyle.height }}>
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        minHeight: 0,
+        ...(style?.height === undefined ? {} : { height: style.height }),
+      }}
+    >
       <canvas ref={canvasRef} className={className} style={canvasStyle} aria-label="3D companion" />
       <AvatarLoadProgressBars progress={loadProgress} />
     </div>

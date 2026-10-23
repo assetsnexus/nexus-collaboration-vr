@@ -32,6 +32,7 @@ import {
 } from './scene-occupants.js'
 import { StandInMarker } from './stand-in.js'
 import { DEFAULT_SAMPLE_VRM } from './default-sample-vrm.js'
+import { resolveCharacterToolName } from './tools.js'
 import { PhoneVrController, type PhoneVrStatus } from './phone-vr-controller.js'
 import {
   defaultPhoneVrSettings,
@@ -56,6 +57,12 @@ export interface SceneRoomOptions {
   /** Local phone-VR viewer settings (smartphone cardboard-class glasses). */
   phoneVrSettings?: PhoneVrSettingsV1
   onPhoneVrStatus?: (status: PhoneVrStatus) => void
+  /**
+   * Single-occupant companion stage: skip roster nametags / status circles and
+   * frame the lone avatar instead of a group. The room bounds + grid stay, so
+   * `character_walk` / `character_approach` remain visibly meaningful.
+   */
+  soloStage?: boolean
 }
 
 export interface SceneRoomAvatarConfig {
@@ -145,6 +152,8 @@ export class SceneRoom {
   private readonly logger: Pick<Console, 'info' | 'warn' | 'error'>
   private readonly spacing: number
   private readonly onLabelClick?: (id: string) => void
+  /** Companion solo stage: no nametags / status circles for the lone occupant. */
+  private readonly soloStage: boolean
   private controls: OrbitControls | null = null
   private resizeObserver: ResizeObserver | null = null
   private animationFrame = 0
@@ -181,6 +190,7 @@ export class SceneRoom {
     this.onLabelDblClick = options.onLabelDblClick
     this.gestureManifestUrl = options.gestureManifestUrl
     this.onPhoneVrStatus = options.onPhoneVrStatus
+    this.soloStage = options.soloStage === true
     if (!this.gestureManifestUrl) {
       this.logger.warn?.(
         '[character-kit] SceneRoom has no gestureManifestUrl — occupants stay in T-pose without an idle clip',
@@ -316,6 +326,13 @@ export class SceneRoom {
     }
     for (const id of [...this.labels.keys()]) {
       if (!wanted.has(id)) this.removeLabel(id)
+    }
+    // A solo companion stage shows the avatar only: no nametags, no status
+    // circles, so the single occupant is not framed like a meeting roster.
+    if (this.soloStage) {
+      this.selectedId = null
+      this.layoutAll(false)
+      return
     }
     for (const occ of this.occupants) {
       this.ensurePlaceholder(occ)
@@ -824,6 +841,54 @@ export class SceneRoom {
     const state = this.avatars.get(id)
     if (!state) return { ok: false, name, message: `unknown avatar: ${id}` }
     return state.director.runToolCall(name, args)
+  }
+
+  /** Route a tool call through the director so the motion feed records it. */
+  async runToolCall(
+    id: string,
+    name: string,
+    args: Record<string, unknown> = {},
+  ): Promise<import('./types.js').ToolResult> {
+    const state = this.avatars.get(id)
+    if (!state) return { ok: false, name, message: `unknown avatar: ${id}` }
+    return state.director.runToolCall(resolveCharacterToolName(name), args)
+  }
+
+  setAvatarMood(
+    id: string,
+    mood: string,
+    source: CharacterActionSource = 'user',
+    detail = 'config',
+  ): boolean {
+    const state = this.avatars.get(id)
+    if (!state) return false
+    const ok = state.director.getPresence().setMood(mood)
+    if (ok) state.director.pushAction('mood', mood, source, detail)
+    return ok
+  }
+
+  listAvatarGestures(id: string): string[] {
+    const state = this.avatars.get(id)
+    return state ? state.controller.listGestures() : []
+  }
+
+  listLoadedAvatarGestures(id: string): import('./types.js').LoadedGestureInfo[] {
+    const state = this.avatars.get(id)
+    return state ? state.controller.listLoadedGestures() : []
+  }
+
+  isAvatarIdlePlaying(id: string): boolean {
+    return this.avatars.get(id)?.controller.isIdlePlaying() ?? false
+  }
+
+  playAvatarGesture(
+    id: string,
+    gestureId: string,
+    opts: { loop?: boolean; timeScale?: number; source?: CharacterActionSource; target?: string } = {},
+  ): Promise<boolean> {
+    const handle = this.getAvatar(id)
+    if (!handle) return Promise.resolve(false)
+    return handle.playGesture(gestureId, opts.target)
   }
 
   drainSceneDigest(agent: string): { events: CompactSceneEvent[]; faces: Record<string, string> } {

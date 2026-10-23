@@ -1,0 +1,35 @@
+{
+  "name": "@nexus/character-ui-kit",
+  "version": "0.1.0",
+  "description": "Reusable debug/config surfaces for @nexus/character-kit: motion feed, gesture tester, status motions, ambient presence hook",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./styles.css"
+  },
+  "files": ["dist", "styles.css", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --experimental-strip-types --test src/motion-feed-rows.test.ts src/agent-status-gestures.test.ts src/gesture-routines.test.ts"
+  },
+  "peerDependencies": {
+    "@nexus/character-kit": "workspace:*",
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@nexus/character-kit": "workspace:*",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.9.2"
+  }
+}

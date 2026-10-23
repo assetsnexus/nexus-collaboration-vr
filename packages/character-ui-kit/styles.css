@@ -1,0 +1,322 @@
+/*
+ * @nexus/character-ui-kit — motion feed, gesture tester, status motions.
+ *
+ * Ported from the oc-controller reference project's debug-popup styles and made
+ * theme-var-driven so a host can adopt its own palette. `--border` and
+ * `--muted` fall back to sensible dark-theme defaults.
+ */
+
+.motion-debug-popup {
+  --nexus-motion-border: var(--border, rgba(255, 255, 255, 0.12));
+  --nexus-motion-muted: var(--muted, #9aa4ad);
+  position: relative;
+  z-index: 125;
+  width: min(440px, calc(100vw - 1.5rem));
+  max-height: min(52vh, 420px);
+  display: flex;
+  flex-direction: column;
+  background: rgba(12, 16, 20, 0.96);
+  border: 1px solid var(--nexus-motion-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  color: inherit;
+}
+
+.motion-debug-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--nexus-motion-border);
+  user-select: none;
+}
+
+.motion-debug-head p {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+}
+
+.motion-debug-head-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.motion-debug-head-actions button {
+  padding: 0.25rem 0.45rem;
+  font-size: 0.72rem;
+}
+
+.motion-debug-empty {
+  margin: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.motion-debug-table-wrap {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(126, 184, 255, 0.4) transparent;
+}
+
+.motion-debug-live {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.4rem 0.65rem;
+  border-bottom: 1px solid var(--nexus-motion-border);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.motion-debug-pill {
+  font-size: 0.68rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-debug-pill.playing {
+  color: #8ec2ff;
+  border-color: rgba(126, 184, 255, 0.45);
+  background: rgba(59, 110, 168, 0.25);
+}
+
+.motion-debug-pill.pending {
+  color: #c4a574;
+  border-color: rgba(196, 165, 116, 0.4);
+  background: rgba(196, 165, 116, 0.12);
+}
+
+.motion-debug-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+}
+
+.motion-debug-table th,
+.motion-debug-table td {
+  padding: 0.28rem 0.45rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.motion-debug-table th {
+  position: sticky;
+  top: 0;
+  background: rgba(12, 16, 20, 0.98);
+  color: var(--nexus-motion-muted);
+  font-weight: 600;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.motion-debug-table tbody tr:nth-child(odd):not(.motion-debug-series):not([data-chain]) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.motion-debug-table tr.motion-debug-series td {
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nexus-motion-muted);
+  background: rgba(59, 110, 168, 0.16);
+  border-bottom: none;
+  padding-top: 0.45rem;
+  padding-bottom: 0.28rem;
+}
+
+.motion-debug-table tr[data-chain] {
+  background: rgba(59, 110, 168, 0.07) !important;
+}
+
+.motion-debug-table tr[data-chain] td:first-child {
+  box-shadow: inset 3px 0 0 rgba(126, 184, 255, 0.55);
+}
+
+.motion-debug-table tr[data-chain='last'] td {
+  border-bottom: 1px solid rgba(126, 184, 255, 0.22);
+}
+
+.motion-debug-step {
+  display: inline-block;
+  min-width: 2.1rem;
+  margin-right: 0.35rem;
+  color: var(--nexus-motion-muted);
+  font-size: 0.62rem;
+}
+
+.motion-debug-table tr.status-playing {
+  background: rgba(59, 110, 168, 0.18) !important;
+}
+
+.motion-debug-table tr.status-pending {
+  background: rgba(196, 165, 116, 0.1) !important;
+  opacity: 0.9;
+}
+
+.motion-debug-table tr.status-canceled,
+.motion-debug-table tr.status-discarded {
+  opacity: 0.55;
+}
+
+.motion-debug-table tr.status-canceled td,
+.motion-debug-table tr.status-discarded td {
+  text-decoration: line-through;
+  text-decoration-color: rgba(212, 116, 106, 0.7);
+}
+
+.motion-status {
+  font-size: 0.62rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.motion-status.status-playing {
+  color: #8ec2ff;
+}
+
+.motion-status.status-pending {
+  color: #c4a574;
+}
+
+.motion-status.status-done {
+  color: var(--nexus-motion-muted);
+}
+
+.motion-status.status-canceled,
+.motion-status.status-discarded {
+  color: #d4746a;
+}
+
+.motion-debug-table td[data-src='agent'],
+.motion-debug-table td[data-src='tool'],
+.motion-debug-table td[data-src='tag'] {
+  color: #6aae8a;
+}
+
+.motion-debug-table td[data-src='routine'],
+.motion-debug-table td[data-src='auto'] {
+  color: #c4a574;
+}
+
+.motion-debug-table td[data-src='user'] {
+  color: #7eb8ff;
+}
+
+.motion-debug-table td[data-src='cancel'] {
+  color: #d4746a;
+}
+
+.motion-debug-table td.motion-debug-op {
+  position: relative;
+  overflow: hidden;
+}
+
+.motion-debug-op-bar {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.motion-debug-op-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(126, 184, 255, 0.32);
+}
+
+.motion-debug-op-cancel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(212, 116, 106, 0.28);
+}
+
+.motion-debug-op-bar-full-cancel {
+  background: rgba(212, 116, 106, 0.28);
+}
+
+.motion-debug-op-text {
+  position: relative;
+  z-index: 1;
+}
+
+.gesture-test-popup {
+  width: min(420px, calc(100vw - 1.5rem));
+  max-height: min(62vh, 520px);
+}
+
+.gesture-test-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.4rem 0.65rem;
+  border-bottom: 1px solid var(--nexus-motion-border);
+}
+
+.gesture-test-toolbar input[type='search'] {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.75rem;
+  padding: 0.22rem 0.45rem;
+}
+
+.gesture-test-play {
+  padding: 0.12rem 0.4rem;
+  font-size: 0.68rem;
+}
+
+.status-motions-config {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.55rem;
+  border: 1px solid var(--nexus-motion-border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.status-motions-hint {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.status-motions-state {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.45rem 0.5rem 0.55rem;
+  border: 1px solid var(--nexus-motion-border);
+  border-radius: 8px;
+}
+
+.status-motions-state legend {
+  padding: 0 0.3rem;
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.status-motions-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.55rem;
+}
+
+/* Hosts that don't define these theme tokens still get readable muted text. */
+.motion-debug-popup .muted {
+  color: var(--nexus-motion-muted);
+}

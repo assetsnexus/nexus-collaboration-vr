@@ -85,15 +85,24 @@ export function SceneRoomCanvas({
     [onVrShellRequest],
   )
 
+  // Fill the host pane by default; callers that need a fixed slab pass `style`.
   const canvasStyle: React.CSSProperties = {
     width: '100%',
-    height: 480,
+    height: '100%',
     display: 'block',
     ...style,
   }
 
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        minHeight: 0,
+        ...(style?.height === undefined ? {} : { height: style.height }),
+      }}
+    >
       <canvas ref={canvasRef} className={className} style={canvasStyle} aria-label="3D scene room" />
       <AvatarLoadProgressBars progress={loadProgress} />
       {phoneVrEnabled ? (

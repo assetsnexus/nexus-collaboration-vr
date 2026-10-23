@@ -11,6 +11,7 @@ import {
 } from '@pixiv/three-vrm-animation'
 import { VRMLipSync } from 'three-vrm-lip-sync'
 import { enqueueAudioWorkletInit, ensureAudioWorkletReady } from './lip-sync-init.js'
+import { releaseLipSync } from './lip-sync-lifecycle.js'
 import { BlinkController, IdleEyeSaccades } from './blink-saccades.js'
 import { CharacterGaze, parseLookAtTarget, type GazeLimits, type GazeLookOptions } from './gaze.js'
 import type { CharacterActionSource } from './action-feed.js'
@@ -215,6 +216,12 @@ export class CharacterController {
   private mixer: THREE.AnimationMixer | null = null
   private lipSync: VRMLipSync | null = null
   private lipSyncPending: Promise<VRMLipSync> | null = null
+  /**
+   * True when `ensureLipSync` was called without an AudioContext, so the
+   * instance owns (and must close) the context the lip-sync engine created.
+   * A caller-provided context is shared and never closed here.
+   */
+  private lipSyncOwnsContext = false
   private gestures = new Map<string, LoadedGesture>()
   private currentAction: THREE.AnimationAction | null = null
   private idleAction: THREE.AnimationAction | null = null
@@ -479,8 +486,9 @@ export class CharacterController {
     if (!vrm) throw new Error(`No VRM in ${url}`)
 
     if (this.vrm) {
-      this.lipSync?.dispose()
+      releaseLipSync(this.lipSync, this.lipSyncOwnsContext)
       this.lipSync = null
+      this.lipSyncOwnsContext = false
       this.rig.remove(this.vrm.scene)
       VRMUtils.deepDispose(this.vrm.scene)
     }
@@ -585,6 +593,11 @@ export class CharacterController {
   }
 
   private startIdle(): void {
+    // Without a mixer-resolvable idle clip, don't leave the rig on the bind
+    // pose: snap the relaxed rest pose so it at least reads as a rest stance.
+    if (!this.gestures.has('idle') && this.vrm) {
+      applyRelaxedRestPose(this.vrm)
+    }
     this.setIdleLoop('idle', {
       crossFade: this.idleAction ? 0.3 : 0,
       preserveOverlays: true,
@@ -1557,8 +1570,9 @@ export class CharacterController {
     if (!this.vrm) throw new Error('loadVRM first')
     if (this.disposed) throw new Error('CharacterController disposed')
     if (this.lipSync && this.lipSync.vrm !== this.vrm) {
-      this.lipSync.dispose()
+      releaseLipSync(this.lipSync, this.lipSyncOwnsContext)
       this.lipSync = null
+      this.lipSyncOwnsContext = false
     }
     if (this.lipSync) return this.lipSync
     if (this.lipSyncPending) return this.lipSyncPending
@@ -1572,10 +1586,13 @@ export class CharacterController {
       if (this.lipSync && this.lipSync.vrm === this.vrm) return this.lipSync
       const created = await VRMLipSync.create(this.vrm, { audioContext })
       if (this.disposed) {
-        created.dispose()
+        // Nothing else holds this instance; close a context we created.
+        releaseLipSync(created, !audioContext)
         throw new Error('CharacterController disposed')
       }
       this.lipSync = created
+      // Only a context we implicitly created is ours to close on teardown.
+      this.lipSyncOwnsContext = !audioContext
       this.logger.info?.('[character-kit] lip-sync ready', {
         visemes: this.listExpressions()
           .filter((e) => e.kind === 'viseme')
@@ -3341,8 +3358,9 @@ export class CharacterController {
     window.removeEventListener('pointercancel', this.onOrbitPointerUp)
     this.face.dispose()
     this.lipSyncPending = null
-    this.lipSync?.dispose()
+    releaseLipSync(this.lipSync, this.lipSyncOwnsContext)
     this.lipSync = null
+    this.lipSyncOwnsContext = false
     this.controls?.dispose()
     this.disposeClothesOverlayGroup()
     this.overlayCache.dispose()

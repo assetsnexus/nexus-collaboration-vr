@@ -9,6 +9,9 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
+      '@nexus/character-kit/presence-moods': fileURLToPath(
+        new URL('../../packages/character-kit/src/presence-moods.ts', import.meta.url),
+      ),
       '@nexus/character-kit': fileURLToPath(
         new URL('../../packages/character-kit/src/index.ts', import.meta.url),
       ),

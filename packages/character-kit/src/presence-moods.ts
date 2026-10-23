@@ -161,10 +161,34 @@ const PRESENCE_MOOD_ALIASES: Record<string, PresenceMoodId> = {
   warm: 'happy',
   gentle: 'relaxed',
   default: 'neutral',
+  // Native emotion engine (`NativeEmotionEngine.moodToPresence`) emits richer
+  // PAD words than the ambient catalog. Map them onto real ids so
+  // `setMood('alert'|'energetic')` never silently returns false and leaves the
+  // last mood sticky. `happy`/`sad` are already canonical ids.
+  alert: 'focused',
+  energetic: 'excited',
+  content: 'relaxed',
+  cheerful: 'happy',
+  bored: 'tired',
+  down: 'sad',
+  sleepy: 'tired',
+  attentive: 'curious',
+}
+
+/**
+ * Coerce any inbound mood label (engine output, profile seed, LLM tool arg) to a
+ * canonical `PresenceMoodId`, or `null` when nothing matches. Case- and
+ * whitespace-tolerant; shared by the emotion engine and the character host.
+ */
+export function coercePresenceMoodId(id: string | null | undefined): PresenceMoodId | null {
+  if (typeof id !== 'string') return null
+  const key = id.trim().toLowerCase()
+  if (!key) return null
+  const aliased = PRESENCE_MOOD_ALIASES[key] ?? (key as PresenceMoodId)
+  return Object.prototype.hasOwnProperty.call(PRESENCE_MOODS, aliased) ? aliased : null
 }
 
 export function resolvePresenceMood(id: string): PresenceMoodDef | null {
-  const key = id.trim().toLowerCase()
-  const aliased = PRESENCE_MOOD_ALIASES[key] ?? (key as PresenceMoodId)
-  return PRESENCE_MOODS[aliased] ?? null
+  const coerced = coercePresenceMoodId(id)
+  return coerced ? PRESENCE_MOODS[coerced] : null
 }

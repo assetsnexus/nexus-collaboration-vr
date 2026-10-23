@@ -99,6 +99,7 @@ export type {
   CompanionClothesInput,
   CompanionHostOptions,
   CompanionLoadOptions,
+  GesturePackStatus,
 } from './companion-host.js'
 export { AnimationDirector } from './animation-director.js'
 export type { SequenceStep, SequenceOp, DirectorOptions } from './animation-director.js'
@@ -127,6 +128,7 @@ export {
   PRESENCE_MOODS,
   listPresenceMoods,
   resolvePresenceMood,
+  coercePresenceMoodId,
 } from './presence-moods.js'
 export type { PresenceMoodId, PresenceMoodDef } from './presence-moods.js'
 export {

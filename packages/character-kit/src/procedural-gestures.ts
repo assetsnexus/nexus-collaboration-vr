@@ -62,6 +62,26 @@ export function scratchNoseGestureBones(): BoneName[] {
   return scratchNoseRestOffsets().map((b) => b.bone)
 }
 
+/**
+ * Stamp diagnostic values onto a clip's `userData` bag.
+ *
+ * three.js only started initializing `AnimationClip.userData` in the
+ * constructor at 0.171. On 0.170 (the version the desktop app bundles) the
+ * field is `undefined`, so a direct `clip.userData.ikDist = …` throws
+ * `Cannot set properties of undefined (setting 'ikDist')` and takes down the
+ * whole procedural-fallback build (`buildProceduralGestureClips`), which is
+ * what stopped VRM-1.0 rigs from rendering. Create the bag defensively.
+ *
+ * @internal exported for tests
+ */
+export function assignClipUserData(
+  clip: { userData?: Record<string, unknown> },
+  data: Record<string, unknown>,
+): void {
+  if (!clip.userData) clip.userData = {}
+  Object.assign(clip.userData, data)
+}
+
 const FULL_BODY_BONE = /^(hips|spine|chest|upperChest|leftUpperLeg|rightUpperLeg)/
 
 /** Overlay clips keep idle on unkeyed bones (nod / scratch). */
@@ -266,12 +286,21 @@ function buildScratchNoseClip(
 
   const hand = vrm.humanoid?.getNormalizedBoneNode('rightHand')
   const head = vrm.humanoid?.getNormalizedBoneNode('head')
+  // Some rigs (e.g. stripped / partial VRM-1.0 samples) have no right-hand or
+  // head normalized bone. The reach pose is defined against them, so building a
+  // "scratch" clip would be meaningless — and computing world distances off a
+  // missing node leaves stale scratch vectors. Skip the clip instead of
+  // throwing (a throw here aborts every procedural fallback for the rig).
+  if (!hand || !head) {
+    vrm.humanoid?.resetNormalizedPose()
+    return null
+  }
   const target = new THREE.Vector3()
   scratchNoseWorldTarget(vrm, target)
-  hand?.getWorldPosition(_ccdEnd)
-  const ikDist = hand ? _ccdEnd.distanceTo(target) : 0
-  head?.getWorldPosition(_ccdOrig)
-  const ikDz = head ? _ccdEnd.z - _ccdOrig.z : 0
+  hand.getWorldPosition(_ccdEnd)
+  const ikDist = _ccdEnd.distanceTo(target)
+  head.getWorldPosition(_ccdOrig)
+  const ikDz = _ccdEnd.z - _ccdOrig.z
 
   const times = [0, 0.28, 0.55, 0.82, 1.08, 1.4]
   const clip = clipFromLocalQuatFrames('scratch_nose', vrm, times, [
@@ -284,8 +313,7 @@ function buildScratchNoseClip(
   ])
   vrm.humanoid?.resetNormalizedPose()
   if (clip) {
-    clip.userData.ikDist = ikDist
-    clip.userData.ikDz = ikDz
+    assignClipUserData(clip, { ikDist, ikDz })
   }
   return clip
 }
@@ -500,6 +528,407 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
     'Lean right weight shift (procedural)',
   )
 
+  // --- Mood-pool fallbacks ---------------------------------------------------
+  // PRESENCE_MOODS pools reference many ids that a VRMA pack provides. Without a
+  // pack (or when the pack is skipped/failed) those ids must still exist or
+  // IdlePresenceDirector logs "missing gesture" and the rig stays on the rest
+  // loop with nothing lively. These are intentionally approximate, relative to
+  // rest, and cheap — real VRMA always wins when the manifest loads.
+  //
+  // Two flavours: arm/shoulder/hand-only bases (`A`) stay overlays so they layer
+  // over the standing idle *or* the sit rest loop without stealing the body;
+  // spine-keyed bases replace the rest loop (comfort beats like stretch).
+
+  /** Arms + shoulders + hands at relaxed rest — never keys spine/legs. */
+  const A = R.filter((b) => /Shoulder|UpperArm|LowerArm|Hand/.test(b.bone))
+
+  // Subtle standing weight shift. The mood pools name the *logical* id
+  // `weight_shift` and IdlePresenceDirector checks the literal id before the
+  // controller resolves the variant group (`weight_shift_lean_l/_r`), so a bare
+  // `weight_shift` must exist too or the tier silently skips.
+  add(
+    'weight_shift',
+    [0, 0.7, 1.6, 2.4],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, z: 2.5 * DEG },
+        { bone: VRMHumanBoneName.Spine, z: 2 * DEG },
+        { bone: VRMHumanBoneName.Chest, z: 1.5 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: 68 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, z: -62 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, z: -2.5 * DEG },
+        { bone: VRMHumanBoneName.Spine, z: -2 * DEG },
+        { bone: VRMHumanBoneName.Chest, z: -1.5 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: 62 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, z: -68 * DEG },
+        { bone: VRMHumanBoneName.Head, y: -3 * DEG },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural subtle weight shift',
+  )
+  // Looping seated rest for the long-idle tier. VRM rigs have no floor contact
+  // model, so this is a visual "chair sit" — hips set down, knees bent forward,
+  // arms resting on the lap. Hip X drives the seat height via reanchor.
+  add(
+    'sit',
+    [0, 1.4, 3.0],
+    [
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, x: 62 * DEG },
+        { bone: VRMHumanBoneName.Spine, x: 6 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: 4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperLeg, x: -82 * DEG },
+        { bone: VRMHumanBoneName.RightUpperLeg, x: -82 * DEG },
+        { bone: VRMHumanBoneName.LeftLowerLeg, x: 84 * DEG },
+        { bone: VRMHumanBoneName.RightLowerLeg, x: 84 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, z: 62 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, z: -62 * DEG },
+        { bone: VRMHumanBoneName.LeftLowerArm, y: 20 * DEG },
+        { bone: VRMHumanBoneName.RightLowerArm, y: -20 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, x: 62 * DEG },
+        { bone: VRMHumanBoneName.Spine, x: 4 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: 2 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperLeg, x: -82 * DEG },
+        { bone: VRMHumanBoneName.RightUpperLeg, x: -82 * DEG },
+        { bone: VRMHumanBoneName.LeftLowerLeg, x: 84 * DEG },
+        { bone: VRMHumanBoneName.RightLowerLeg, x: 84 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, z: 62 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, z: -62 * DEG },
+        { bone: VRMHumanBoneName.LeftLowerArm, y: 20 * DEG },
+        { bone: VRMHumanBoneName.RightLowerArm, y: -20 * DEG },
+        { bone: VRMHumanBoneName.Head, x: 3 * DEG, y: 4 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, x: 62 * DEG },
+        { bone: VRMHumanBoneName.Spine, x: 6 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: 4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperLeg, x: -82 * DEG },
+        { bone: VRMHumanBoneName.RightUpperLeg, x: -82 * DEG },
+        { bone: VRMHumanBoneName.LeftLowerLeg, x: 84 * DEG },
+        { bone: VRMHumanBoneName.RightLowerLeg, x: 84 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, z: 62 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, z: -62 * DEG },
+        { bone: VRMHumanBoneName.LeftLowerArm, y: 20 * DEG },
+        { bone: VRMHumanBoneName.RightLowerArm, y: -20 * DEG },
+      ]),
+    ],
+    true,
+    'Procedural seated rest (long idle)',
+  )
+
+  // Head-only glances (overlay: never disturb the idle rest loop's body keys).
+  add(
+    'look_around',
+    [0, 0.5, 1.1, 1.7, 2.2],
+    [
+      H,
+      withBone(H, [{ bone: VRMHumanBoneName.Head, y: 22 * DEG }]),
+      withBone(H, [
+        { bone: VRMHumanBoneName.Head, y: 18 * DEG, x: -4 * DEG },
+        { bone: VRMHumanBoneName.Neck, y: 8 * DEG },
+      ]),
+      withBone(H, [{ bone: VRMHumanBoneName.Head, y: -20 * DEG }]),
+      H,
+    ],
+    false,
+    'Procedural glance around (head only)',
+  )
+
+  add(
+    'look_around_sleepy',
+    [0, 0.7, 1.6, 2.4],
+    [
+      H,
+      withBone(H, [
+        { bone: VRMHumanBoneName.Head, y: 16 * DEG, z: 8 * DEG, x: 6 * DEG },
+        { bone: VRMHumanBoneName.Neck, z: 5 * DEG },
+      ]),
+      withBone(H, [
+        { bone: VRMHumanBoneName.Head, y: -14 * DEG, z: -7 * DEG, x: 5 * DEG },
+      ]),
+      H,
+    ],
+    false,
+    'Procedural slow sleepy glance (head only)',
+  )
+
+  add(
+    'look_around_turn',
+    [0, 0.6, 1.4, 2.2],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Chest, y: 12 * DEG },
+        { bone: VRMHumanBoneName.Head, y: 20 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Chest, y: -12 * DEG },
+        { bone: VRMHumanBoneName.Head, y: -20 * DEG },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural glance around with a small torso turn',
+  )
+
+  // Right hand up to the chin + a small head tilt: "thinking" beat.
+  const thinkRaise = withBone(A, [
+    { bone: VRMHumanBoneName.RightShoulder, z: 10 * DEG },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 26 * DEG, y: 55 * DEG, z: -62 * DEG },
+    { bone: VRMHumanBoneName.RightLowerArm, y: 118 * DEG },
+    { bone: VRMHumanBoneName.RightHand, x: 12 * DEG, z: -8 * DEG },
+  ])
+  add(
+    'think',
+    [0, 0.5, 1.3, 2.0, 2.6],
+    [
+      A,
+      withBone(thinkRaise, [
+        { bone: VRMHumanBoneName.Head, x: 10 * DEG, y: 6 * DEG },
+        { bone: VRMHumanBoneName.Neck, x: 4 * DEG },
+      ]),
+      withBone(thinkRaise, [
+        { bone: VRMHumanBoneName.Head, x: 12 * DEG, y: -6 * DEG, z: 5 * DEG },
+        { bone: VRMHumanBoneName.Neck, x: 5 * DEG },
+      ]),
+      withBone(thinkRaise, [
+        { bone: VRMHumanBoneName.Head, x: 6 * DEG, y: 4 * DEG },
+        { bone: VRMHumanBoneName.Neck, x: 2 * DEG },
+      ]),
+      A,
+    ],
+    false,
+    'Procedural thinking beat (hand to chin, arm-only overlay)',
+  )
+
+  // Hand raised beside the head + side wiggle: a wave (arm-only overlay).
+  const waveRaise = withBone(A, [
+    { bone: VRMHumanBoneName.RightShoulder, z: 12 * DEG },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 30 * DEG, y: 65 * DEG, z: -64 * DEG },
+    { bone: VRMHumanBoneName.RightLowerArm, y: 130 * DEG },
+  ])
+  add(
+    'wave',
+    [0, 0.16, 0.34, 0.52, 0.7, 0.9],
+    [
+      A,
+      withBone(waveRaise, [
+        { bone: VRMHumanBoneName.RightHand, x: 10 * DEG, y: 22 * DEG },
+        { bone: VRMHumanBoneName.Head, y: 5 * DEG },
+      ]),
+      withBone(waveRaise, [{ bone: VRMHumanBoneName.RightHand, x: 10 * DEG, y: -22 * DEG }]),
+      withBone(waveRaise, [{ bone: VRMHumanBoneName.RightHand, x: 10 * DEG, y: 22 * DEG }]),
+      withBone(waveRaise, [{ bone: VRMHumanBoneName.RightHand, x: 10 * DEG, y: -18 * DEG }]),
+      A,
+    ],
+    false,
+    'Procedural wave (right hand raised, arm-only overlay)',
+  )
+
+  add(
+    'sit_wave',
+    [0, 0.18, 0.4, 0.6, 0.82],
+    [
+      A,
+      withBone(waveRaise, [{ bone: VRMHumanBoneName.RightHand, y: 18 * DEG }]),
+      withBone(waveRaise, [{ bone: VRMHumanBoneName.RightHand, y: -18 * DEG }]),
+      withBone(waveRaise, [{ bone: VRMHumanBoneName.RightHand, y: 16 * DEG }]),
+      A,
+    ],
+    false,
+    'Procedural seated wave fidget (arm-only overlay)',
+  )
+
+  add(
+    'v_sign',
+    [0, 0.25, 0.9, 1.4],
+    [
+      A,
+      withBone(waveRaise, [
+        { bone: VRMHumanBoneName.RightHand, x: 10 * DEG, y: 8 * DEG },
+        { bone: VRMHumanBoneName.Head, y: 4 * DEG },
+      ]),
+      withBone(waveRaise, [{ bone: VRMHumanBoneName.RightHand, x: 8 * DEG, y: -6 * DEG }]),
+      A,
+    ],
+    false,
+    'Procedural V-sign (arm-only overlay)',
+  )
+
+  // Peace/V-sign short variant: same raise, hand down sooner.
+  add(
+    'v_sign_short',
+    [0, 0.2, 0.6],
+    [
+      A,
+      withBone(waveRaise, [{ bone: VRMHumanBoneName.RightHand, x: 10 * DEG, y: 6 * DEG }]),
+      A,
+    ],
+    false,
+    'Procedural V-sign, short hold (arm-only overlay)',
+  )
+
+  const clapIn = withBone(A, [
+    { bone: VRMHumanBoneName.LeftUpperArm, x: 34 * DEG, y: 34 * DEG, z: 34 * DEG },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 34 * DEG, y: -34 * DEG, z: -34 * DEG },
+    { bone: VRMHumanBoneName.LeftLowerArm, y: 58 * DEG },
+    { bone: VRMHumanBoneName.RightLowerArm, y: -58 * DEG },
+  ])
+  const clapOut = withBone(A, [
+    { bone: VRMHumanBoneName.LeftUpperArm, x: 30 * DEG, y: 30 * DEG, z: 30 * DEG },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 30 * DEG, y: -30 * DEG, z: -30 * DEG },
+    { bone: VRMHumanBoneName.LeftLowerArm, y: 44 * DEG },
+    { bone: VRMHumanBoneName.RightLowerArm, y: -44 * DEG },
+  ])
+  add(
+    'clap',
+    [0, 0.14, 0.3, 0.46, 0.62, 0.8],
+    [A, clapIn, clapOut, clapIn, clapOut, A],
+    false,
+    'Procedural clap (arm-only overlay)',
+  )
+
+  // Full-body comfort beats (spine keyed → non-overlay, replaces the rest loop).
+  add(
+    'stretch',
+    [0, 0.6, 1.3, 2.0, 2.5],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: -55 * DEG, z: 70 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: -55 * DEG, z: -70 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -6 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -6 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: -4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: -62 * DEG, y: 6 * DEG, z: 74 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: -62 * DEG, y: -6 * DEG, z: -74 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -8 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -3 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: -40 * DEG, z: 66 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: -40 * DEG, z: -66 * DEG },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural stretch (arms overhead)',
+  )
+
+  add(
+    'sleepy',
+    [0, 0.8, 2.0, 3.0],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: 5 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: 4 * DEG },
+        { bone: VRMHumanBoneName.Neck, x: 8 * DEG },
+        { bone: VRMHumanBoneName.Head, x: 10 * DEG, z: 6 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: 58 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, z: -58 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: 6 * DEG },
+        { bone: VRMHumanBoneName.Neck, x: 10 * DEG },
+        { bone: VRMHumanBoneName.Head, x: 12 * DEG, z: -6 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: 54 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, z: -54 * DEG },
+      ]),
+      R,
+    ],
+    true,
+    'Procedural sleepy sway (loop)',
+  )
+
+  add(
+    'sad',
+    [0, 0.9, 2.1, 3.0],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: 6 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: 5 * DEG },
+        { bone: VRMHumanBoneName.Neck, x: 7 * DEG },
+        { bone: VRMHumanBoneName.Head, x: 12 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: 66 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, z: -66 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: 7 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: 6 * DEG },
+        { bone: VRMHumanBoneName.Head, x: 14 * DEG, y: 5 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: 68 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, z: -68 * DEG },
+      ]),
+      R,
+    ],
+    true,
+    'Procedural sad slouch (loop)',
+  )
+
+  add(
+    'surprised',
+    [0, 0.14, 0.4, 0.8, 1.2],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -8 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: -18 * DEG, z: 50 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: -18 * DEG, z: -50 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -6 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -10 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: -34 * DEG, z: 44 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: -34 * DEG, z: -44 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -8 * DEG, y: 4 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: -12 * DEG, z: 54 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: -12 * DEG, z: -54 * DEG },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural startle / surprise',
+  )
+
+  // Arms out to the sides, gentle bank: the "airplane" fidget.
+  add(
+    'airplane',
+    [0, 0.9, 2.0, 3.0],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, z: 4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: 0, z: 8 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: 0, z: -8 * DEG },
+        { bone: VRMHumanBoneName.Head, z: 3 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, z: -4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: 0, z: 8 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: 0, z: -8 * DEG },
+        { bone: VRMHumanBoneName.Head, z: -3 * DEG },
+      ]),
+      R,
+    ],
+    true,
+    'Procedural airplane sway (arms out)',
+  )
+
   // True crouch (knees bent) — not the floating chair sit VRMA
   add(
     'crouch_idle',
@@ -704,8 +1133,7 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
     'Procedural floor crawl',
   )
 
-  const rollA = withBone(R, [
-    { bone: VRMHumanBoneName.Hips, z: 35 * DEG, x: -10 * DEG },
+  const rollA = withBone(R, [    { bone: VRMHumanBoneName.Hips, z: 35 * DEG, x: -10 * DEG },
     { bone: VRMHumanBoneName.Spine, z: 25 * DEG },
     { bone: VRMHumanBoneName.LeftUpperLeg, x: -40 * DEG },
     { bone: VRMHumanBoneName.RightUpperLeg, x: -20 * DEG },
