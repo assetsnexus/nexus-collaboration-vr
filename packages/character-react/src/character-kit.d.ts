@@ -341,6 +341,11 @@ declare module '@nexus/character-kit' {
     enterPhoneVr(): Promise<PhoneVrStatus>
     exitPhoneVr(): Promise<PhoneVrStatus>
     isPhoneVrActive(): boolean
+    setPointerLook(enabled: boolean): void
+    /** OS-global cursor feed: push gaze NDC / route gaze through the external feed. */
+    setPointerNdc(ndcX: number, ndcY: number): void
+    setExternalPointerEnabled(on: boolean): void
+    resize(): void
     getLoadProgress(): AvatarAssetLoadProgress
     onLoadProgress(listener: AvatarAssetLoadProgressListener): () => void
     dispose(): void

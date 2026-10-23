@@ -334,6 +334,11 @@ export class CharacterGaze {
   /** Yaw hips toward the camera as it orbits. Default off. */
   bodyFollowCamera = false
   private pointerOver = false
+  /**
+   * When true, gaze is driven by an OS-global cursor feed (Electron screen
+   * coords) rather than DOM pointer events, so window-leave must not clear it.
+   */
+  private externalPointer = false
   private ndcX = 0
   private ndcY = 0
   private explicit: Xyz | null = null
@@ -428,6 +433,18 @@ export class CharacterGaze {
     if (!on) this.pointerOver = false
   }
 
+  /**
+   * Drive gaze from an external (OS-global) cursor feed instead of DOM pointer
+   * events. While enabled, DOM `mouseleave` / `blur` clears are ignored and the
+   * eyes keep holding the last external target, so the avatar follows the cursor
+   * even when it is outside the window. The host pushes coordinates via
+   * {@link setPointerNdc}.
+   */
+  setExternalPointerEnabled(on: boolean): void {
+    this.externalPointer = on
+    if (!on) this.pointerOver = false
+  }
+
   setBodyFollowCamera(on: boolean): void {
     this.bodyFollowCamera = on
     if (!on) {
@@ -445,6 +462,9 @@ export class CharacterGaze {
   }
 
   clearPointer(): void {
+    // An external (OS-global) feed owns the pointer: a DOM `mouseleave` / `blur`
+    // is not evidence the cursor left the avatar's attention, so ignore it.
+    if (this.externalPointer) return
     this.pointerOver = false
   }
 

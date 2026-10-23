@@ -158,6 +158,8 @@ export class SceneRoom {
   private resizeObserver: ResizeObserver | null = null
   private animationFrame = 0
   private pointerLookEnabled: boolean
+  /** When true, gaze follows an OS-global cursor feed (desktop companion). */
+  private externalPointerLook = false
   private audioContext: AudioContext | null = null
   private disposed = false
   private occupants: SceneRoomOccupant[] = []
@@ -425,6 +427,7 @@ export class SceneRoom {
       pointerLook: this.pointerLookEnabled,
       agentId: config.id,
     })
+    if (this.externalPointerLook) controller.setExternalPointerEnabled(true)
     const director = new AnimationDirector(controller, {
       presence: { enabled: true, mood: (config.mood as 'neutral') || 'neutral' },
     })
@@ -953,6 +956,25 @@ export class SceneRoom {
     this.logger.info?.('[character-kit] SceneRoom pointer look', enabled)
   }
 
+  /**
+   * Push an OS-global cursor NDC to every occupant (see the desktop companion
+   * global-cursor IPC). Pair with {@link setExternalPointerEnabled} so in-window
+   * DOM moves and window-leave clears stop overriding the external aim.
+   */
+  setPointerNdc(ndcX: number, ndcY: number): void {
+    for (const avatar of this.avatars.values()) {
+      avatar.controller.setPointerNdc(ndcX, ndcY)
+    }
+  }
+
+  /** Route every occupant's gaze through an external cursor feed. */
+  setExternalPointerEnabled(on: boolean): void {
+    this.externalPointerLook = on
+    for (const avatar of this.avatars.values()) {
+      avatar.controller.setExternalPointerEnabled(on)
+    }
+  }
+
   /** Smartphone VR glasses mode (stereo + IMU / WebXR). Same enter/exit rails as portal play-webxr. */
   getPhoneVr(): PhoneVrController {
     return this.phoneVr
@@ -1225,6 +1247,8 @@ export class SceneRoom {
     if (this.disposed) return
     this.sceneFx.hoverAt(this.camera, this.canvas, event.clientX, event.clientY)
     if (!this.pointerLookEnabled || this.avatars.size === 0) return
+    // An OS-global cursor feed owns the aim; in-window DOM moves would fight it.
+    if (this.externalPointerLook) return
     const rect = this.canvas.getBoundingClientRect()
     const width = rect.width || 1
     const height = rect.height || 1

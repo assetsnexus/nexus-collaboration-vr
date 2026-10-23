@@ -710,6 +710,23 @@ export class CompanionHost {
     this.controller.setPointerLookEnabled(on)
   }
 
+  /**
+   * Push an explicit gaze NDC from an external cursor feed (e.g. Electron
+   * `screen.getCursorScreenPoint` mapped through the window bounds). Pair with
+   * {@link setExternalPointerEnabled} so in-window DOM moves stop overriding it.
+   */
+  setPointerNdc(x: number, y: number): void {
+    this.controller.setPointerNdc(x, y)
+  }
+
+  /**
+   * Route gaze through the external cursor feed instead of DOM pointer events,
+   * so the avatar keeps tracking while the cursor is off-window.
+   */
+  setExternalPointerEnabled(on: boolean): void {
+    this.controller.setExternalPointerEnabled(on)
+  }
+
   setBodyFollowCamera(on: boolean): void {
     this.controller.setBodyFollowCamera(on)
   }

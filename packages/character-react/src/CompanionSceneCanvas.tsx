@@ -43,6 +43,9 @@ export type CompanionSceneHost = {
   onAction: (listener: (ev: CharacterActionEvent) => void) => () => void
   pausePresence: (reason?: string) => void
   resumePresence: () => void
+  /** OS-global cursor feed: push gaze NDC / route gaze through the external feed. */
+  setPointerNdc: (x: number, y: number) => void
+  setExternalPointerEnabled: (on: boolean) => void
   speakWithLipSync: (stream: MediaStream, ctx?: AudioContext) => Promise<void>
   stopLipSync: () => void
   ensureLipSync: (ctx?: AudioContext) => Promise<unknown>
@@ -189,6 +192,8 @@ export function createCompanionSceneHost(
     listLoadedGestures: () => room.listLoadedAvatarGestures(occupantId),
     listGestures: () => room.listAvatarGestures(occupantId),
     onAction: (listener) => room.onAction(listener),
+    setPointerNdc: (x, y) => room.setPointerNdc(x, y),
+    setExternalPointerEnabled: (on) => room.setExternalPointerEnabled(on),
     pausePresence: (reason = 'agent_status') => {
       room.getAvatar(occupantId)?.director.pausePresence(reason)
     },

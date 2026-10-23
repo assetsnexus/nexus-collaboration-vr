@@ -226,3 +226,34 @@ describe('CharacterGaze.bind', () => {
     assert.ok(Math.abs(Math.abs(body) - Math.PI) < 1e-4, `body ${body}`)
   })
 })
+
+describe('CharacterGaze external pointer', () => {
+  it('keeps tracking after clearPointer while an external feed is enabled', () => {
+    const gaze = new CharacterGaze()
+    gaze.setExternalPointerEnabled(true)
+    gaze.setPointerNdc(0.5, 0.5)
+    assert.equal(gaze.isPointerTracking(), true)
+
+    // DOM `mouseleave` / window blur fire `clearPointer`; with an OS-global feed
+    // that must not stop the aim, so tracking stays on.
+    gaze.clearPointer()
+    assert.equal(gaze.isPointerTracking(), true)
+  })
+
+  it('clears the pointer once the external feed is disabled', () => {
+    const gaze = new CharacterGaze()
+    gaze.setExternalPointerEnabled(true)
+    gaze.setPointerNdc(0.5, 0.5)
+    gaze.setExternalPointerEnabled(false)
+    gaze.clearPointer()
+    assert.equal(gaze.isPointerTracking(), false)
+  })
+
+  it('has no effect on clearPointer when the external feed was never enabled', () => {
+    const gaze = new CharacterGaze()
+    gaze.setPointerNdc(0.5, 0.5)
+    gaze.clearPointer()
+    assert.equal(gaze.isPointerTracking(), false)
+  })
+})
+

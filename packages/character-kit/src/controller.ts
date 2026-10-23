@@ -211,6 +211,8 @@ export class CharacterController {
   private readonly eyeTarget = new THREE.Object3D()
   private readonly rig = new THREE.Group()
   private readonly gaze = new CharacterGaze()
+  /** When true, gaze follows an OS-global cursor feed (desktop companion). */
+  private externalPointerLook = false
   private controls: OrbitControls | null = null
   private vrm: VRM | null = null
   private mixer: THREE.AnimationMixer | null = null
@@ -424,6 +426,20 @@ export class CharacterController {
 
   setPointerNdc(x: number, y: number): void {
     this.gaze.setPointerNdc(x, y)
+  }
+
+  /**
+   * Switch gaze to an OS-global cursor feed. The host then pushes NDC via
+   * {@link setPointerNdc} from Electron screen coordinates (see the desktop
+   * global-cursor IPC), and DOM pointer leave / blur no longer clears the aim.
+   */
+  setExternalPointerEnabled(on: boolean): void {
+    this.externalPointerLook = on
+    this.gaze.setExternalPointerEnabled(on)
+  }
+
+  isExternalPointerEnabled(): boolean {
+    return this.externalPointerLook
   }
 
   clearPointerLook(): void {
@@ -2117,6 +2133,8 @@ export class CharacterController {
   private onPointerMove(e: PointerEvent): void {
     if (this.ownsSceneFx) this.sceneFx.hoverAt(this.camera, this.canvas, e.clientX, e.clientY)
     if (!this.gaze.pointerEnabled) return
+    // An OS-global cursor feed owns the aim; in-window DOM moves would fight it.
+    if (this.externalPointerLook) return
     const ndc = this.pointerNdc(e)
     this.gaze.setPointerNdc(ndc.x, ndc.y)
   }
