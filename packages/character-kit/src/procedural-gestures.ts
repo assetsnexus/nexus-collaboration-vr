@@ -13,6 +13,29 @@ interface BoneEuler {
 const DEG = THREE.MathUtils.DEG2RAD
 
 /**
+ * Arm Z sign convention on a three-vrm normalized T-pose bind, verified against
+ * a live VRM-1.0 rig: the **left** arm lowers with a **negative** Z rotation and
+ * the **right** arm lowers with a **positive** one. Raises (wave, stretch,
+ * think) use the opposite signs. Authoring a hang pose with the raise signs was
+ * what left both arms stuck overhead — keep every hang/rest base on these signs.
+ *
+ * @internal exported for tests
+ */
+export const ARM_HANG_L = -1
+/** @internal exported for tests */
+export const ARM_HANG_R = 1
+
+/** Left upper-arm hang magnitude (deg) → signed Z offset. */
+function hangL(deg: number): number {
+  return ARM_HANG_L * deg * DEG
+}
+
+/** Right upper-arm hang magnitude (deg) → signed Z offset. */
+function hangR(deg: number): number {
+  return ARM_HANG_R * deg * DEG
+}
+
+/**
  * Relative-to-rest pose (vroid_companion style). Degrees converted to radians.
  * Used only when a VRMA clip is missing for an id.
  */
@@ -24,12 +47,13 @@ function relaxedOffsets(): BoneEuler[] {
     { bone: VRMHumanBoneName.Head, x: -2 * DEG },
     { bone: VRMHumanBoneName.LeftShoulder, z: -4 * DEG },
     { bone: VRMHumanBoneName.RightShoulder, z: 4 * DEG },
-    { bone: VRMHumanBoneName.LeftUpperArm, x: 3 * DEG, y: 4 * DEG, z: 64 * DEG },
-    { bone: VRMHumanBoneName.RightUpperArm, x: 3 * DEG, y: -4 * DEG, z: -64 * DEG },
-    { bone: VRMHumanBoneName.LeftLowerArm, y: 8 * DEG, z: 10 * DEG },
-    { bone: VRMHumanBoneName.RightLowerArm, y: -8 * DEG, z: -10 * DEG },
-    { bone: VRMHumanBoneName.LeftHand, x: 2 * DEG, z: 4 * DEG },
-    { bone: VRMHumanBoneName.RightHand, x: 2 * DEG, z: -4 * DEG },
+    // Arms hang down (A-pose): left negative Z, right positive Z.
+    { bone: VRMHumanBoneName.LeftUpperArm, x: 3 * DEG, y: 4 * DEG, z: hangL(64) },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 3 * DEG, y: -4 * DEG, z: hangR(64) },
+    { bone: VRMHumanBoneName.LeftLowerArm, y: 8 * DEG, z: -10 * DEG },
+    { bone: VRMHumanBoneName.RightLowerArm, y: -8 * DEG, z: 10 * DEG },
+    { bone: VRMHumanBoneName.LeftHand, x: 2 * DEG, z: -4 * DEG },
+    { bone: VRMHumanBoneName.RightHand, x: 2 * DEG, z: 4 * DEG },
   ]
 }
 
@@ -51,9 +75,9 @@ function scratchNoseRestOffsets(): BoneEuler[] {
     { bone: VRMHumanBoneName.Neck, x: 2 * DEG },
     { bone: VRMHumanBoneName.Head, x: -2 * DEG },
     { bone: VRMHumanBoneName.RightShoulder, z: 4 * DEG },
-    { bone: VRMHumanBoneName.RightUpperArm, x: 3 * DEG, y: -4 * DEG, z: -64 * DEG },
-    { bone: VRMHumanBoneName.RightLowerArm, y: -8 * DEG, z: -10 * DEG },
-    { bone: VRMHumanBoneName.RightHand, x: 2 * DEG, z: -4 * DEG },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 3 * DEG, y: -4 * DEG, z: hangR(64) },
+    { bone: VRMHumanBoneName.RightLowerArm, y: -8 * DEG, z: 10 * DEG },
+    { bone: VRMHumanBoneName.RightHand, x: 2 * DEG, z: 4 * DEG },
   ]
 }
 
@@ -272,10 +296,11 @@ function buildScratchNoseClip(
   vrm.humanoid?.update()
   const hangLocals = captureBoneLocals(vrm, bones)
 
+  // Reach values verified on a live VRM-1.0 rig: hand comes up to ~nose height.
   const peakOffsets = withBone(hang, [
-    { bone: VRMHumanBoneName.RightShoulder, z: 12 * DEG },
-    { bone: VRMHumanBoneName.RightUpperArm, x: 30 * DEG, y: 65 * DEG, z: -64 * DEG },
-    { bone: VRMHumanBoneName.RightLowerArm, y: 130 * DEG, x: 0 },
+    { bone: VRMHumanBoneName.RightShoulder, z: 10 * DEG },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 0, y: 18 * DEG, z: -86 * DEG },
+    { bone: VRMHumanBoneName.RightLowerArm, y: 108 * DEG, x: 0 },
     { bone: VRMHumanBoneName.RightHand, x: 14 * DEG, z: -8 * DEG },
     { bone: VRMHumanBoneName.Head, y: 8 * DEG, x: 6 * DEG },
     { bone: VRMHumanBoneName.Neck, x: 4 * DEG },
@@ -387,8 +412,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
       withBone(R, [
         { bone: VRMHumanBoneName.Spine, x: 4 * DEG },
         { bone: VRMHumanBoneName.Chest, x: -4 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, z: 68 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, z: -68 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(68) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(68) },
       ]),
       R,
     ],
@@ -491,8 +516,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
         { bone: VRMHumanBoneName.Spine, z: 4 * DEG, x: 2 * DEG },
         { bone: VRMHumanBoneName.Hips, z: 3 * DEG },
         { bone: VRMHumanBoneName.Chest, z: 3 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, z: 70 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, z: -58 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(70) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(58) },
       ]),
       withBone(R, [
         { bone: VRMHumanBoneName.Spine, z: 5 * DEG },
@@ -514,8 +539,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
         { bone: VRMHumanBoneName.Spine, z: -4 * DEG, x: 2 * DEG },
         { bone: VRMHumanBoneName.Hips, z: -3 * DEG },
         { bone: VRMHumanBoneName.Chest, z: -3 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, z: 58 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, z: -70 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(58) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(70) },
       ]),
       withBone(R, [
         { bone: VRMHumanBoneName.Spine, z: -5 * DEG },
@@ -555,15 +580,15 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
         { bone: VRMHumanBoneName.Hips, z: 2.5 * DEG },
         { bone: VRMHumanBoneName.Spine, z: 2 * DEG },
         { bone: VRMHumanBoneName.Chest, z: 1.5 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, z: 68 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, z: -62 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(68) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(62) },
       ]),
       withBone(R, [
         { bone: VRMHumanBoneName.Hips, z: -2.5 * DEG },
         { bone: VRMHumanBoneName.Spine, z: -2 * DEG },
         { bone: VRMHumanBoneName.Chest, z: -1.5 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, z: 62 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, z: -68 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(62) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(68) },
         { bone: VRMHumanBoneName.Head, y: -3 * DEG },
       ]),
       R,
@@ -586,8 +611,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
         { bone: VRMHumanBoneName.RightUpperLeg, x: -82 * DEG },
         { bone: VRMHumanBoneName.LeftLowerLeg, x: 84 * DEG },
         { bone: VRMHumanBoneName.RightLowerLeg, x: 84 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, z: 62 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, z: -62 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, z: hangL(62) },
+        { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, z: hangR(62) },
         { bone: VRMHumanBoneName.LeftLowerArm, y: 20 * DEG },
         { bone: VRMHumanBoneName.RightLowerArm, y: -20 * DEG },
       ]),
@@ -599,8 +624,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
         { bone: VRMHumanBoneName.RightUpperLeg, x: -82 * DEG },
         { bone: VRMHumanBoneName.LeftLowerLeg, x: 84 * DEG },
         { bone: VRMHumanBoneName.RightLowerLeg, x: 84 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, z: 62 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, z: -62 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, z: hangL(62) },
+        { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, z: hangR(62) },
         { bone: VRMHumanBoneName.LeftLowerArm, y: 20 * DEG },
         { bone: VRMHumanBoneName.RightLowerArm, y: -20 * DEG },
         { bone: VRMHumanBoneName.Head, x: 3 * DEG, y: 4 * DEG },
@@ -613,8 +638,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
         { bone: VRMHumanBoneName.RightUpperLeg, x: -82 * DEG },
         { bone: VRMHumanBoneName.LeftLowerLeg, x: 84 * DEG },
         { bone: VRMHumanBoneName.RightLowerLeg, x: 84 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, z: 62 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, z: -62 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, z: hangL(62) },
+        { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, z: hangR(62) },
         { bone: VRMHumanBoneName.LeftLowerArm, y: 20 * DEG },
         { bone: VRMHumanBoneName.RightLowerArm, y: -20 * DEG },
       ]),
@@ -678,12 +703,13 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
     'Procedural glance around with a small torso turn',
   )
 
-  // Right hand up to the chin + a small head tilt: "thinking" beat.
+  // Right hand up to the chin + a small head tilt: "thinking" beat. Raise values
+  // verified against a live VRM-1.0 rig (hand reaches ~chin height, not overhead).
   const thinkRaise = withBone(A, [
-    { bone: VRMHumanBoneName.RightShoulder, z: 10 * DEG },
-    { bone: VRMHumanBoneName.RightUpperArm, x: 26 * DEG, y: 55 * DEG, z: -62 * DEG },
-    { bone: VRMHumanBoneName.RightLowerArm, y: 118 * DEG },
-    { bone: VRMHumanBoneName.RightHand, x: 12 * DEG, z: -8 * DEG },
+    { bone: VRMHumanBoneName.RightShoulder, z: 8 * DEG },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 0, y: 12 * DEG, z: -80 * DEG },
+    { bone: VRMHumanBoneName.RightLowerArm, y: 100 * DEG },
+    { bone: VRMHumanBoneName.RightHand, x: 10 * DEG, z: -6 * DEG },
   ])
   add(
     'think',
@@ -708,11 +734,12 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
     'Procedural thinking beat (hand to chin, arm-only overlay)',
   )
 
-  // Hand raised beside the head + side wiggle: a wave (arm-only overlay).
+  // Hand raised beside the head + side wiggle: a wave (arm-only overlay). Raise
+  // values verified on a live VRM-1.0 rig: hand reaches ~head height (~1.59m).
   const waveRaise = withBone(A, [
-    { bone: VRMHumanBoneName.RightShoulder, z: 12 * DEG },
-    { bone: VRMHumanBoneName.RightUpperArm, x: 30 * DEG, y: 65 * DEG, z: -64 * DEG },
-    { bone: VRMHumanBoneName.RightLowerArm, y: 130 * DEG },
+    { bone: VRMHumanBoneName.RightShoulder, z: 14 * DEG },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 5 * DEG, y: 25 * DEG, z: -88 * DEG },
+    { bone: VRMHumanBoneName.RightLowerArm, y: 55 * DEG },
   ])
   add(
     'wave',
@@ -835,15 +862,15 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
         { bone: VRMHumanBoneName.Chest, x: 4 * DEG },
         { bone: VRMHumanBoneName.Neck, x: 8 * DEG },
         { bone: VRMHumanBoneName.Head, x: 10 * DEG, z: 6 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, z: 58 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, z: -58 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(58) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(58) },
       ]),
       withBone(R, [
         { bone: VRMHumanBoneName.Spine, x: 6 * DEG },
         { bone: VRMHumanBoneName.Neck, x: 10 * DEG },
         { bone: VRMHumanBoneName.Head, x: 12 * DEG, z: -6 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, z: 54 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, z: -54 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(54) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(54) },
       ]),
       R,
     ],
@@ -861,15 +888,15 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
         { bone: VRMHumanBoneName.Chest, x: 5 * DEG },
         { bone: VRMHumanBoneName.Neck, x: 7 * DEG },
         { bone: VRMHumanBoneName.Head, x: 12 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, z: 66 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, z: -66 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(66) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(66) },
       ]),
       withBone(R, [
         { bone: VRMHumanBoneName.Spine, x: 7 * DEG },
         { bone: VRMHumanBoneName.Chest, x: 6 * DEG },
         { bone: VRMHumanBoneName.Head, x: 14 * DEG, y: 5 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, z: 68 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, z: -68 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(68) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(68) },
       ]),
       R,
     ],
@@ -943,8 +970,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
         { bone: VRMHumanBoneName.RightUpperLeg, x: -75 * DEG },
         { bone: VRMHumanBoneName.LeftLowerLeg, x: 100 * DEG },
         { bone: VRMHumanBoneName.RightLowerLeg, x: 100 * DEG },
-        { bone: VRMHumanBoneName.LeftUpperArm, z: 75 * DEG, x: 15 * DEG },
-        { bone: VRMHumanBoneName.RightUpperArm, z: -75 * DEG, x: 15 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(75), x: 15 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(75), x: 15 * DEG },
         { bone: VRMHumanBoneName.Head, x: 8 * DEG },
       ]),
       withBone(R, [
@@ -972,10 +999,10 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
   // Opposite-leg walk: hung arms (Z) + sagittal swing on Y (X lifts/raises
   // in VRM A-pose — that was the "hands up" bug). Arm opposite the lead leg.
   const walkHang = withBone(R, [
-    { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, y: 0, z: 72 * DEG },
-    { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, y: 0, z: -72 * DEG },
-    { bone: VRMHumanBoneName.LeftLowerArm, y: 10 * DEG, z: 8 * DEG },
-    { bone: VRMHumanBoneName.RightLowerArm, y: -10 * DEG, z: -8 * DEG },
+    { bone: VRMHumanBoneName.LeftUpperArm, x: 6 * DEG, y: 0, z: hangL(72) },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 6 * DEG, y: 0, z: hangR(72) },
+    { bone: VRMHumanBoneName.LeftLowerArm, y: 10 * DEG, z: -8 * DEG },
+    { bone: VRMHumanBoneName.RightLowerArm, y: -10 * DEG, z: 8 * DEG },
   ])
   const walkL = withBone(walkHang, [
     { bone: VRMHumanBoneName.Hips, y: 4 * DEG },
@@ -1013,8 +1040,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
   // --- Extra locomotion gaits (overridable by VRMA / manifest.locomotion) ---
   const runHang = withBone(R, [
     { bone: VRMHumanBoneName.Spine, x: 8 * DEG },
-    { bone: VRMHumanBoneName.LeftUpperArm, x: 10 * DEG, y: 0, z: 68 * DEG },
-    { bone: VRMHumanBoneName.RightUpperArm, x: 10 * DEG, y: 0, z: -68 * DEG },
+    { bone: VRMHumanBoneName.LeftUpperArm, x: 10 * DEG, y: 0, z: hangL(68) },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 10 * DEG, y: 0, z: hangR(68) },
   ])
   const runL = withBone(runHang, [
     { bone: VRMHumanBoneName.Hips, y: 6 * DEG },
@@ -1038,8 +1065,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
 
   const carefulHang = withBone(R, [
     { bone: VRMHumanBoneName.Spine, x: 4 * DEG },
-    { bone: VRMHumanBoneName.LeftUpperArm, x: 4 * DEG, y: 0, z: 74 * DEG },
-    { bone: VRMHumanBoneName.RightUpperArm, x: 4 * DEG, y: 0, z: -74 * DEG },
+    { bone: VRMHumanBoneName.LeftUpperArm, x: 4 * DEG, y: 0, z: hangL(74) },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 4 * DEG, y: 0, z: hangR(74) },
   ])
   const carefulL = withBone(carefulHang, [
     { bone: VRMHumanBoneName.Hips, y: 2 * DEG },
@@ -1072,8 +1099,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
     { bone: VRMHumanBoneName.RightUpperLeg, x: -55 * DEG },
     { bone: VRMHumanBoneName.LeftLowerLeg, x: 75 * DEG },
     { bone: VRMHumanBoneName.RightLowerLeg, x: 75 * DEG },
-    { bone: VRMHumanBoneName.LeftUpperArm, x: 8 * DEG, y: 0, z: 70 * DEG },
-    { bone: VRMHumanBoneName.RightUpperArm, x: 8 * DEG, y: 0, z: -70 * DEG },
+    { bone: VRMHumanBoneName.LeftUpperArm, x: 8 * DEG, y: 0, z: hangL(70) },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 8 * DEG, y: 0, z: hangR(70) },
   ])
   const crouchL = withBone(crouchHang, [
     { bone: VRMHumanBoneName.Hips, y: 4 * DEG, x: -28 * DEG },
@@ -1110,8 +1137,8 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
     { bone: VRMHumanBoneName.RightUpperLeg, x: -90 * DEG },
     { bone: VRMHumanBoneName.LeftLowerLeg, x: 100 * DEG },
     { bone: VRMHumanBoneName.RightLowerLeg, x: 100 * DEG },
-    { bone: VRMHumanBoneName.LeftUpperArm, x: -40 * DEG, y: 20 * DEG, z: 50 * DEG },
-    { bone: VRMHumanBoneName.RightUpperArm, x: -40 * DEG, y: -20 * DEG, z: -50 * DEG },
+    { bone: VRMHumanBoneName.LeftUpperArm, x: -40 * DEG, y: 20 * DEG, z: hangL(50) },
+    { bone: VRMHumanBoneName.RightUpperArm, x: -40 * DEG, y: -20 * DEG, z: hangR(50) },
   ])
   const crawlL = withBone(crawlHang, [
     { bone: VRMHumanBoneName.LeftUpperArm, x: -55 * DEG, y: 10 * DEG },

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import * as THREE from 'three'
 import {
+  ARM_HANG_L,
+  ARM_HANG_R,
   assignClipUserData,
   buildProceduralGestureClips,
   scratchNoseGestureBones,
@@ -118,6 +120,37 @@ describe('buildProceduralGestureClips rig tolerance', () => {
     const bones = scratchNoseGestureBones()
     assert.ok(bones.includes('rightUpperArm'))
     assert.ok(!bones.some((b) => b.startsWith('left')))
+  })
+})
+
+describe('arm hang sign convention (stuck-arms regression)', () => {
+  // On a three-vrm normalized T-pose the left arm lowers with negative Z and the
+  // right arm lowers with positive Z; raises use the opposite signs. Authoring a
+  // hang pose with the raise signs left both arms stuck overhead (hands above
+  // the head) in the shipped companion — this locks the correct convention.
+  it('lowers the LEFT arm with negative Z and the RIGHT arm with positive Z', () => {
+    assert.equal(ARM_HANG_L, -1)
+    assert.equal(ARM_HANG_R, 1)
+  })
+
+  it('keys the standing idle with a downward (hang) left upper-arm Z', () => {
+    const idle = buildProceduralGestureClips(mockVrm() as never).find((c) => c.id === 'idle')!
+    const track = idle.clip.tracks.find(
+      (t) => t.name.replace(/\.[^.]+$/, '').toLowerCase() === 'leftupperarm',
+    ) as THREE.QuaternionKeyframeTrack
+    assert.ok(track, 'idle keys the left upper arm')
+    // +Z would raise the arm; the hang pose must rotate the other way.
+    const first = new THREE.Quaternion(
+      track.values[0]!,
+      track.values[1]!,
+      track.values[2]!,
+      track.values[3]!,
+    )
+    const identity = new THREE.Quaternion()
+    // hlpr: an intrinsic Z rotation of +68° would put w·z > 0; a negative-Z hang
+    // puts them opposite in sign.
+    assert.ok(first.z * first.w < 0, 'idle left upper arm must hang (negative Z)')
+    assert.ok(identity.angleTo(first) > 0.1, 'idle actually rotates the arm')
   })
 })
 
