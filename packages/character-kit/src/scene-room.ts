@@ -32,6 +32,10 @@ import {
 } from './scene-occupants.js'
 import { StandInMarker } from './stand-in.js'
 import { DEFAULT_SAMPLE_VRM } from './default-sample-vrm.js'
+import {
+  InteractionAck,
+  type InteractionAckOptions,
+} from './interaction-ack.js'
 import { resolveCharacterToolName } from './tools.js'
 import { PhoneVrController, type PhoneVrStatus } from './phone-vr-controller.js'
 import {
@@ -178,6 +182,12 @@ export class SceneRoom {
   private readonly actionListeners = new Set<CharacterActionListener>()
   private readonly phoneVr: PhoneVrController
   private readonly onPhoneVrStatus?: (status: PhoneVrStatus) => void
+  /**
+   * Solo-stage click/zoom ack (nod on click). Only created for the single-avatar
+   * companion stage, where a page click meaningfully targets "the avatar"; in a
+   * shared meeting roster it would be ambiguous, so it stays null there.
+   */
+  private clickAck: InteractionAck | null = null
   private loadProgress: AvatarAssetLoadProgress = emptyAvatarAssetLoadProgress()
   private readonly loadProgressListeners = new Set<AvatarAssetLoadProgressListener>()
   private readonly modelLoadRatios = new Map<string, number>()
@@ -286,6 +296,40 @@ export class SceneRoom {
       options.phoneVrSettings ?? defaultPhoneVrSettings(),
     )
     this.logger.info?.('[character-kit] SceneRoom ready')
+  }
+
+  /**
+   * Enable/disable the solo click-ack (nod on page click) with a configurable
+   * gesture id. Created lazily so a shared roster (meeting) never installs a
+   * document click listener, where click targeting would be ambiguous.
+   */
+  setClickAckOptions(opts: Partial<InteractionAckOptions> & { enabled?: boolean }): void {
+    const { enabled, ...rest } = opts
+    if (enabled === false) {
+      this.clickAck?.dispose()
+      this.clickAck = null
+      return
+    }
+    if (!this.clickAck) {
+      this.clickAck = new InteractionAck(this.canvas, (id, meta) => {
+        const avatar = [...this.avatars.values()][0]
+        if (!avatar) return
+        avatar.controller.playGesture(id, false, 0.12, meta.timeScale, 'user')
+        avatar.director.pushAction('gesture', id, 'user', meta.reason)
+      })
+      // Zoom acks stay off: the companion surfaces do not use wheel-to-gesture.
+      this.clickAck.setOptions({ zoomEnabled: false })
+    }
+    if (Object.keys(rest).length) this.clickAck.setOptions(rest)
+    // The play handler guards on a loaded occupant, so ack readiness does not need
+    // to wait for the VRM/gesture async load here.
+    this.clickAck.setReady(true)
+  }
+
+  /** Current solo click-ack options (null when disabled / not installed). */
+  getClickAckOptions(): (InteractionAckOptions & { enabled: boolean }) | null {
+    if (!this.clickAck) return null
+    return { enabled: true, ...this.clickAck.getOptions() }
   }
 
   /**
@@ -1013,6 +1057,8 @@ export class SceneRoom {
     document.documentElement.removeEventListener('mouseleave', this.onPointerLeave)
     this.resizeObserver?.disconnect()
     this.resizeObserver = null
+    this.clickAck?.dispose()
+    this.clickAck = null
     for (const id of [...this.avatars.keys()]) this.removeAvatar(id)
     for (const id of [...this.placeholders.keys()]) this.removePlaceholder(id)
     for (const id of [...this.labels.keys()]) this.removeLabel(id)

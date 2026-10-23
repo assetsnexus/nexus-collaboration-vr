@@ -46,6 +46,9 @@ export type CompanionSceneHost = {
   /** OS-global cursor feed: push gaze NDC / route gaze through the external feed. */
   setPointerNdc: (x: number, y: number) => void
   setExternalPointerEnabled: (on: boolean) => void
+  /** Solo click-ack (nod) control: enable + pick the gesture. */
+  setClickAck: (opts: { enabled?: boolean; gesture?: string }) => void
+  getClickAck: () => { enabled: boolean; clickGesture: string } | null
   speakWithLipSync: (stream: MediaStream, ctx?: AudioContext) => Promise<void>
   stopLipSync: () => void
   ensureLipSync: (ctx?: AudioContext) => Promise<unknown>
@@ -194,6 +197,11 @@ export function createCompanionSceneHost(
     onAction: (listener) => room.onAction(listener),
     setPointerNdc: (x, y) => room.setPointerNdc(x, y),
     setExternalPointerEnabled: (on) => room.setExternalPointerEnabled(on),
+    setClickAck: (opts) => room.setClickAckOptions(opts),
+    getClickAck: () => {
+      const opts = room.getClickAckOptions()
+      return opts ? { enabled: opts.enabled, clickGesture: opts.clickGesture } : null
+    },
     pausePresence: (reason = 'agent_status') => {
       room.getAvatar(occupantId)?.director.pausePresence(reason)
     },

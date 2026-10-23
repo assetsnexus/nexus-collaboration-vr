@@ -439,6 +439,19 @@ export class CompanionHost {
     return this.interactionAck.getOptions()
   }
 
+  /**
+   * Convenience for the avatar setting: enable/disable the click nod and pick the
+   * gesture. Pass `enabled: false` to silence click acks without losing the
+   * configured gesture id.
+   */
+  setClickAck(opts: { enabled?: boolean; gesture?: string }): InteractionAckOptions {
+    this.setInteractionAck({
+      clickEnabled: opts.enabled !== false,
+      ...(opts.gesture ? { clickGesture: opts.gesture } : {}),
+    })
+    return this.getInteractionAck()
+  }
+
   setInteractionAckActive(active: boolean): void {
     this.interactionAck.setActive(active)
   }

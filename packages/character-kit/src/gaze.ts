@@ -468,8 +468,26 @@ export class CharacterGaze {
     this.pointerOver = false
   }
 
+  /**
+   * The cursor left the canvas *without* the window losing focus. Unlike
+   * {@link clearPointer} this always drops the pointer-over flag, even in
+   * external-pointer mode — it is the signal the desktop companion uses to widen
+   * tracking from the webview box to the whole OS screen. Safe to call when the
+   * cursor merely grazed an overlay, since any later move re-arms tracking.
+   */
+  clearPointerOnLeave(): boolean {
+    const wasOver = this.pointerOver
+    this.pointerOver = false
+    return wasOver
+  }
+
   isPointerTracking(): boolean {
     return this.pointerEnabled && this.pointerOver && !this.cameraLocked && !this.hasExplicit()
+  }
+
+  /** Last known cursor-over state (set by DOM moves or the external feed). */
+  isPointerOver(): boolean {
+    return this.pointerOver
   }
 
   /** Eyes are driven by pointer aim / smooth return — skip idle saccades. */

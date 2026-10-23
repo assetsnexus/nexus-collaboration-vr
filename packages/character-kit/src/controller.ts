@@ -214,6 +214,9 @@ export class CharacterController {
   /** When true, gaze follows an OS-global cursor feed (desktop companion). */
   private externalPointerLook = false
   private controls: OrbitControls | null = null
+  /** Coalesce container resizes into one renderer-buffer update per frame. */
+  private resizeObserver: ResizeObserver | null = null
+  private resizeRaf = 0
   private vrm: VRM | null = null
   private mixer: THREE.AnimationMixer | null = null
   private lipSync: VRMLipSync | null = null
@@ -391,6 +394,10 @@ export class CharacterController {
       this.canvas.addEventListener('pointerdown', this.onOrbitPointerDown)
       window.addEventListener('pointerup', this.onOrbitPointerUp)
       window.addEventListener('pointercancel', this.onOrbitPointerUp)
+      this.observeResize()
+      // A container can resize before the first observer callback fires (or with
+      // no ResizeObserver at all), so size once up front too.
+      this.resize()
       this.raf = requestAnimationFrame(this.tick)
     }
     this.logger.info?.('[character-kit] controller ready', {
@@ -440,6 +447,16 @@ export class CharacterController {
 
   isExternalPointerEnabled(): boolean {
     return this.externalPointerLook
+  }
+
+  /**
+   * True while the gaze considers the pointer over the canvas (any window focus
+   * state). The host uses this to pick the gaze frame: window-relative while the
+   * cursor is inside, screen-relative once it has left. The external feed also
+   * sets the flag, so it reflects the last known cursor side.
+   */
+  isPointerInside(): boolean {
+    return this.gaze.isPointerOver()
   }
 
   clearPointerLook(): void {
@@ -2145,6 +2162,19 @@ export class CharacterController {
     this.gaze.clearPointer()
   }
 
+  /**
+   * Observe the canvas host so a container resize (companion window drag) updates
+   * the drawing buffer instead of CSS-stretching the last frame. Kept off the
+   * embedded path, where an outer renderer owns sizing.
+   */
+  private observeResize(): void {
+    if (this.embedded || this.resizeObserver) return
+    if (typeof ResizeObserver === 'undefined') return
+    const host = this.canvas.parentElement ?? this.canvas
+    this.resizeObserver = new ResizeObserver(() => this.resize())
+    this.resizeObserver.observe(host)
+  }
+
   /** Subscribe to locomotion moving start/stop (for presence pause). */
   onLocomoting(handler: (moving: boolean) => void): () => void {
     this.locoListeners.add(handler)
@@ -3287,10 +3317,33 @@ export class CharacterController {
     return results
   }
 
+  /**
+   * Resize the drawing buffer to the canvas' CSS box. Called by the resize
+   * observer (coalesced to one rAF) and on demand by hosts that manage their own
+   * layout. Without this the fixed initial buffer would be stretched by CSS and
+   * the model would look distorted after a window resize.
+   */
   resize(): void {
     if (this.embedded || !this.renderer) return
+    if (this.resizeRaf) return
+    this.resizeRaf = requestAnimationFrame(() => {
+      this.resizeRaf = 0
+      this.applyResize()
+    })
+  }
+
+  /** Synchronous resize for hosts that must measure immediately (tests). */
+  resizeNow(): void {
+    if (this.embedded || !this.renderer) return
+    this.applyResize()
+  }
+
+  private applyResize(): void {
+    if (this.disposed || this.embedded || !this.renderer) return
     const w = this.canvas.clientWidth || 1
     const h = this.canvas.clientHeight || 1
+    const size = this.renderer.getSize(new THREE.Vector2())
+    if (size.x === w && size.y === h) return
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h, false)
@@ -3368,6 +3421,10 @@ export class CharacterController {
   dispose(): void {
     this.disposed = true
     cancelAnimationFrame(this.raf)
+    if (this.resizeRaf) cancelAnimationFrame(this.resizeRaf)
+    this.resizeRaf = 0
+    this.resizeObserver?.disconnect()
+    this.resizeObserver = null
     window.removeEventListener('pointermove', this.onPointerMove)
     document.documentElement.removeEventListener('mouseleave', this.onPointerLeaveWindow)
     window.removeEventListener('blur', this.onPointerLeaveWindow)

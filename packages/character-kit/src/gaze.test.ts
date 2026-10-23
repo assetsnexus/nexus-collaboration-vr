@@ -255,5 +255,28 @@ describe('CharacterGaze external pointer', () => {
     gaze.clearPointer()
     assert.equal(gaze.isPointerTracking(), false)
   })
+
+  it('clearPointerOnLeave drops pointer-over even with the external feed on', () => {
+    const gaze = new CharacterGaze()
+    gaze.setExternalPointerEnabled(true)
+    gaze.setPointerNdc(0.5, 0.5)
+    assert.equal(gaze.isPointerOver(), true)
+    // Unlike clearPointer, this is the signal the cursor left the window while
+    // focus is retained — the host widens tracking to the whole screen.
+    assert.equal(gaze.clearPointerOnLeave(), true)
+    assert.equal(gaze.isPointerOver(), false)
+    // Second leave is a no-op (already out), so hosts do not re-notify.
+    assert.equal(gaze.clearPointerOnLeave(), false)
+  })
+
+  it('re-arms pointer-over on the next external sample after a leave', () => {
+    const gaze = new CharacterGaze()
+    gaze.setExternalPointerEnabled(true)
+    gaze.setPointerNdc(0.5, 0.5)
+    gaze.clearPointerOnLeave()
+    gaze.setPointerNdc(-0.2, 0.1)
+    assert.equal(gaze.isPointerOver(), true)
+    assert.equal(gaze.isPointerTracking(), true)
+  })
 })
 

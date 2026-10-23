@@ -345,6 +345,9 @@ declare module '@nexus/character-kit' {
     /** OS-global cursor feed: push gaze NDC / route gaze through the external feed. */
     setPointerNdc(ndcX: number, ndcY: number): void
     setExternalPointerEnabled(on: boolean): void
+    /** Solo click-ack (nod on page click): enable + pick the gesture. */
+    setClickAckOptions(opts: { enabled?: boolean; clickGesture?: string; clickSpeed?: number; clickEnabled?: boolean; zoomEnabled?: boolean; zoomInGesture?: string; zoomOutGesture?: string }): void
+    getClickAckOptions(): { enabled: boolean; clickGesture: string; clickEnabled: boolean; clickSpeed: number; zoomEnabled: boolean; zoomInGesture: string; zoomOutGesture: string } | null
     resize(): void
     getLoadProgress(): AvatarAssetLoadProgress
     onLoadProgress(listener: AvatarAssetLoadProgressListener): () => void
