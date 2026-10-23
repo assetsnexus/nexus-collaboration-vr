@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import { CharacterController } from './controller.js'
+import type { GazeLimits } from './gaze.js'
 import { AnimationDirector } from './animation-director.js'
 import { fetchRewrittenManifest } from './companion-host.js'
 import { mayAutoDownloadAvatarAsset } from './avatar-asset-gate.js'
@@ -164,6 +165,8 @@ export class SceneRoom {
   private pointerLookEnabled: boolean
   /** When true, gaze follows an OS-global cursor feed (desktop companion). */
   private externalPointerLook = false
+  /** Occupant gaze-cone overrides; applied to avatars on add and via the setter. */
+  private gazeLimits: Partial<GazeLimits> | null = null
   private audioContext: AudioContext | null = null
   private disposed = false
   private occupants: SceneRoomOccupant[] = []
@@ -472,6 +475,7 @@ export class SceneRoom {
       agentId: config.id,
     })
     if (this.externalPointerLook) controller.setExternalPointerEnabled(true)
+    if (this.gazeLimits) controller.setGazeLimits(this.gazeLimits)
     const director = new AnimationDirector(controller, {
       presence: { enabled: true, mood: (config.mood as 'neutral') || 'neutral' },
     })
@@ -1017,6 +1021,24 @@ export class SceneRoom {
     for (const avatar of this.avatars.values()) {
       avatar.controller.setExternalPointerEnabled(on)
     }
+  }
+
+  /**
+   * Set the head/neck gaze cone (degrees) for every occupant, and remember it so
+   * avatars added later inherit it. The desktop companion widens this beyond the
+   * tight library default so the head visibly turns as the cursor crosses the
+   * whole screen instead of barely moving.
+   */
+  setGazeLimits(limits: Partial<GazeLimits>): void {
+    this.gazeLimits = { ...(this.gazeLimits ?? {}), ...limits }
+    for (const avatar of this.avatars.values()) {
+      avatar.controller.setGazeLimits(this.gazeLimits)
+    }
+  }
+
+  /** Current occupant gaze cone overrides (empty when the library default is used). */
+  getGazeLimits(): Partial<GazeLimits> {
+    return { ...(this.gazeLimits ?? {}) }
   }
 
   /** Smartphone VR glasses mode (stereo + IMU / WebXR). Same enter/exit rails as portal play-webxr. */

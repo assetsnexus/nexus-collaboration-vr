@@ -46,6 +46,13 @@ export type CompanionSceneHost = {
   /** OS-global cursor feed: push gaze NDC / route gaze through the external feed. */
   setPointerNdc: (x: number, y: number) => void
   setExternalPointerEnabled: (on: boolean) => void
+  /** Head/neck gaze cone (degrees) for a cursor that tracks across the screen. */
+  setGazeLimits: (limits: {
+    headYawMaxDeg?: number
+    headPitchMaxDeg?: number
+    eyeYawMaxDeg?: number
+    eyePitchMaxDeg?: number
+  }) => void
   /** Solo click-ack (nod) control: enable + pick the gesture. */
   setClickAck: (opts: { enabled?: boolean; gesture?: string }) => void
   getClickAck: () => { enabled: boolean; clickGesture: string } | null
@@ -197,6 +204,7 @@ export function createCompanionSceneHost(
     onAction: (listener) => room.onAction(listener),
     setPointerNdc: (x, y) => room.setPointerNdc(x, y),
     setExternalPointerEnabled: (on) => room.setExternalPointerEnabled(on),
+    setGazeLimits: (limits) => room.setGazeLimits(limits),
     setClickAck: (opts) => room.setClickAckOptions(opts),
     getClickAck: () => {
       const opts = room.getClickAckOptions()
