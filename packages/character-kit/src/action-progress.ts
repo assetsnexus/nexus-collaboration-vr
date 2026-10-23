@@ -19,7 +19,7 @@ export function actionTimedProgress(
   now: number,
 ): ActionTimedProgress | null {
   const dur = ev.durationMs
-  if (!Number.isFinite(dur) || dur <= 0) return null
+  if (typeof dur !== 'number' || !Number.isFinite(dur) || dur <= 0) return null
   const canceled = ev.status === 'canceled' || ev.status === 'discarded'
   if (ev.status === 'pending') return { ratio: 0, canceled: false }
   if (canceled) {

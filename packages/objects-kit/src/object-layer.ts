@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import type { SceneEntity, SceneGraph, SceneGraphListener } from '@nexus/scene-kit'
+import type { SceneEntity, SceneGraph } from '@nexus/scene-kit'
 import { normalizeObjectSpec, type ObjectCatalogEntry, type ObjectSpecV1 } from './spec.ts'
 import { assertUrlAllowed, type UrlPolicy, DEFAULT_URL_POLICY } from './url-policy.ts'
 import { createPrimitiveMesh, disposeObject3D } from './mesh.ts'
@@ -43,7 +43,6 @@ export class ObjectSceneLayer {
   private readonly log: Pick<Console, 'warn' | 'error' | 'info'>
   private selectedId: string | null = null
   private unsub: (() => void) | null = null
-  private graph: SceneGraph | null = null
 
   constructor(opts?: ObjectLayerOptions) {
     this.group.name = 'object-scene-layer'
@@ -70,7 +69,6 @@ export class ObjectSceneLayer {
 
   attach(graph: SceneGraph): void {
     this.detach()
-    this.graph = graph
     for (const e of graph.list()) {
       if (e.kind === 'object' || e.kind === 'fx') void this.syncEntity(e)
     }
@@ -95,7 +93,6 @@ export class ObjectSceneLayer {
   detach(): void {
     this.unsub?.()
     this.unsub = null
-    this.graph = null
     for (const id of [...this.entries.keys()]) this.removeVisual(id)
   }
 

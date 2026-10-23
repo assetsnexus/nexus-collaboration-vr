@@ -15,7 +15,6 @@ export class LoadProgressBillboard {
   private readonly fill: THREE.Mesh
   private loadRatio: number | null = null
   private displayRatio = 0
-  private failed = false
   private raf = 0
   private lastTick = 0
 
@@ -58,7 +57,6 @@ export class LoadProgressBillboard {
       this.stopTick()
       return
     }
-    this.failed = false
     this.fillMat.color.setHex(0x7eb8ff)
     this.root.visible = true
     if (ratio >= 0) this.displayRatio = Math.max(this.displayRatio, 0)
@@ -66,7 +64,6 @@ export class LoadProgressBillboard {
   }
 
   setLoadFailed(failed: boolean): void {
-    this.failed = failed
     if (failed) {
       this.fillMat.color.setHex(0xff6b6b)
       this.root.visible = true

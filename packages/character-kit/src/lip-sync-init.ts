@@ -32,7 +32,8 @@ export async function ensureAudioContextRunning(ctx: AudioContext): Promise<void
   if (ctx.state === 'suspended') {
     await ctx.resume()
   }
-  if (ctx.state === 'closed') {
+  // `resume()` can reject if the context closed mid-call; re-read defensively.
+  if ((ctx.state as AudioContextState) === 'closed') {
     throw new Error('AudioContext is closed')
   }
 }

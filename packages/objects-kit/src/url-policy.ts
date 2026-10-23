@@ -13,14 +13,6 @@ export const DEFAULT_URL_POLICY: UrlPolicy = {
   allowHosts: [],
 }
 
-function hostnameOf(url: string): string | null {
-  try {
-    return new URL(url).hostname.toLowerCase()
-  } catch {
-    return null
-  }
-}
-
 /** Block obvious SSRF targets. */
 function isBlockedHost(host: string): boolean {
   if (host === 'localhost' || host.endsWith('.localhost')) return true

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
+import { VRMLoaderPlugin, VRMUtils, type VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
 import { fetchCachedArrayBuffer, loadCachedGltf } from './asset-cache.js'
 import { vrmSceneIsRenderable } from './vrm-ready.js'
 import { loadVrmAnimations } from './vrma-loader.js'
@@ -994,7 +994,7 @@ export class CharacterController {
     for (const bone of occupancySet(occupied)) {
       const hold = restHoldForBone(this.humanoidRest, bone)
       if (!hold) continue
-      const node = this.vrm.humanoid.getNormalizedBoneNode(hold.bone)
+      const node = this.vrm.humanoid.getNormalizedBoneNode(hold.bone as VRMHumanBoneName)
       if (!node) continue
       targets.push({ node, rest: hold.quat })
     }
@@ -1021,7 +1021,7 @@ export class CharacterController {
     for (const bone of occupancySet(occupied)) {
       const hold = restHoldForBone(this.humanoidRest, bone)
       if (!hold) continue
-      const node = this.vrm.humanoid.getNormalizedBoneNode(hold.bone)
+      const node = this.vrm.humanoid.getNormalizedBoneNode(hold.bone as VRMHumanBoneName)
       if (node) nodes.push(node)
     }
     this.restReturn.drop(nodes)
