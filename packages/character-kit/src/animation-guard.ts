@@ -10,6 +10,8 @@
  * policy is unit-testable without Three.js or a live mixer.
  */
 
+import { resolveBoneToken } from './bone-names.ts'
+
 /** One mixer action, projected to the fields the detector needs. */
 export interface GuardActionSnapshot {
   /** Stable identity for logging (`clipName#tracks`). */
@@ -129,16 +131,20 @@ export function detectStuckPose(
 }
 
 /**
- * Which humanoid bones a clip drives. Free of Three.js so the rig guard is
- * testable: `trackName` values are the raw track names (`Normalized_Head.quaternion`).
+ * Which humanoid bones a clip drives, as canonical comparison tokens. Free of
+ * Three.js so the rig guard is testable: `trackName` values are the raw track
+ * names (`Normalized_Head.quaternion`, `Normalized_J_Bip_L_UpperArm.quaternion`).
+ *
+ * Both the clip tracks and the rig node names are mapped through
+ * {@link resolveBoneToken}, so a VRoid-rigged model (nodes named `J_Bip_*`) and a
+ * VRMA clip (`Normalized_*`) land on the same token instead of silently
+ * disagreeing on every bone.
  */
 export function clipBoneTargets(clip: { tracks: Array<{ name: string }> }): string[] {
   const out = new Set<string>()
   for (const track of clip.tracks) {
     if (!/\.(quaternion|rotation)$/i.test(track.name)) continue
-    const target = track.name.replace(/\.[^.]+$/, '')
-    const leaf = target.split('/').pop() ?? target
-    const bone = leaf.replace(/^normalized_/i, '').replace(/[^a-z0-9]/gi, '').toLowerCase()
+    const bone = resolveBoneToken(track.name)
     if (bone) out.add(bone)
   }
   return [...out]
@@ -148,6 +154,35 @@ export function clipBoneTargets(clip: { tracks: Array<{ name: string }> }): stri
 export const RIG_COMPAT_MIN_COVERAGE = 0.6
 /** A clip keying fewer bones than this is a fragment, not a performance. */
 export const RIG_COMPAT_MIN_BONES = 3
+
+/**
+ * The bones this rig reports, as canonical comparison tokens.
+ *
+ * `getNode(bone)` answers for a `VRMHumanBoneName` (the rig adapter in the
+ * controller) and `nodes`, when supplied, are the raw node names three-vrm
+ * exposes (`J_Bip_C_Head`). Both are folded through {@link resolveBoneToken} so a
+ * VRoid rig and a VRMA clip are compared in the same space.
+ */
+export function rigBoneNames(
+  getNode: (bone: string) => unknown,
+  bones: readonly string[],
+  nodes?: Iterable<{ name?: string } | null | undefined>,
+): string[] {
+  const out = new Set<string>()
+  for (const bone of bones) {
+    if (!getNode(bone)) continue
+    const token = resolveBoneToken(bone)
+    if (token) out.add(token)
+  }
+  if (nodes) {
+    for (const node of nodes) {
+      if (!node?.name) continue
+      const token = resolveBoneToken(node.name)
+      if (token) out.add(token)
+    }
+  }
+  return [...out]
+}
 
 export interface RigCompatVerdict {
   compatible: boolean
@@ -189,18 +224,6 @@ export function checkRigCompatibility(
     }
   }
   return { compatible: true, coverage, missing, reason: 'ok' }
-}
-
-/** Humanoid bone names for a rig, normalized the way {@link clipBoneTargets} does. */
-export function rigBoneNames(
-  getNode: (bone: string) => unknown,
-  bones: readonly string[],
-): string[] {
-  const out: string[] = []
-  for (const bone of bones) {
-    if (getNode(bone)) out.push(bone)
-  }
-  return out
 }
 
 export const GUARD_SAMPLE_INTERVAL_MS = 700

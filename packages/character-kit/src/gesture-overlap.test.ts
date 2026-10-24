@@ -11,7 +11,7 @@ import {
   shouldDropQueued,
   trackOccupancy,
   type PlayingGestureSpec,
-} from '../dist/gesture-overlap.js'
+} from './gesture-overlap.ts'
 
 function spec(partial: Partial<PlayingGestureSpec> & Pick<PlayingGestureSpec, 'id'>): PlayingGestureSpec {
   return {
@@ -44,13 +44,17 @@ describe('trackOccupancy / clipIsOverlay', () => {
     )
   })
 
-  it('treats hips/leg clips as body replacements and allows spine overlays', () => {
+  it('treats any stance bone (spine chain or legs) as a body clip', () => {
+    // Head/arm-only clips are overlays. Keying the spine chain or legs means the
+    // clip owns the stance — matching GESTURE_CATALOG's `body` layer (turn/
+    // stretch/startle) and `proceduralFramesAreOverlay`, so the classification
+    // of an unknown clip agrees with the catalog's declared layer.
     assert.equal(clipIsOverlay(['head', 'neck']), true)
     assert.equal(clipIsOverlay(['rightupperarm', 'righthand']), true)
-    assert.equal(clipIsOverlay(['spine', 'chest']), true)
     assert.equal(clipIsOverlay(['hips', 'spine']), false)
-    assert.equal(clipIsOverlay(['upperchest']), true)
+    assert.equal(clipIsOverlay(['upperchest']), false)
     assert.equal(clipIsOverlay(['leftupperleg']), false)
+    assert.equal(clipIsOverlay(['chest', 'head']), false)
   })
 
   it('ignores hips.position when deciding overlay vs body', () => {

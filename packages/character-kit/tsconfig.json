@@ -3,7 +3,12 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "composite": true
+    "composite": true,
+    // Specs run the TypeScript sources directly (`node --experimental-strip-types`
+    // resolves './x.ts', never './x.js'). Allow `.ts` specifiers and let the
+    // compiler rewrite them to `.js` in the emitted `dist`.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts"]

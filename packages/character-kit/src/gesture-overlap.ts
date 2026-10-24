@@ -1,5 +1,29 @@
-import { GESTURE_VARIANT_GROUPS } from './gesture-variants.js'
+import { GESTURE_VARIANT_GROUPS } from './gesture-variants.ts'
 import type { CharacterActionSource } from './action-feed.js'
+import { resolveBoneToken } from './bone-names.ts'
+
+/**
+ * Bones that make a clip own the stance: keying any of them means the clip
+ * replaces the body instead of stacking as a head/arm overlay. The spine/chest
+ * chain counts because a torso gesture (turn, stretch, startle) is a body
+ * performance, not a mask — and the procedural builder classifies with the same
+ * set, so the effective routing matches the catalog's declared layer.
+ */
+export const STANCE_BONE_TOKENS: ReadonlySet<string> = new Set([
+  'hips',
+  'spine',
+  'chest',
+  'upperchest',
+  'leftupperleg',
+  'rightupperleg',
+  'leftlowerleg',
+  'rightlowerleg',
+])
+
+/** True when `tokens` (canonical bone tokens) include a stance-owning bone. */
+export function keysStanceBones(tokens: readonly string[]): boolean {
+  return tokens.some((token) => STANCE_BONE_TOKENS.has(token))
+}
 
 /** Mixer outcome when a gesture is requested while others are already playing. */
 export type GestureOverlapKind = 'play' | 'merge' | 'skip' | 'queue'
@@ -7,13 +31,6 @@ export type GestureOverlapKind = 'play' | 'merge' | 'skip' | 'queue'
 export type GesturePlayResult = 'played' | 'merged' | 'queued' | 'skipped'
 
 export const MAX_GESTURE_QUEUE = 4
-
-/**
- * Bones that own the stance. A clip that keys any of these replaces the body
- * instead of stacking as a head/arm overlay. Spine/chest may still overlay.
- */
-const FULL_BODY_TARGET =
-  /^(hips|leftupperleg|rightupperleg|leftlowerleg|rightlowerleg)/
 
 export interface GestureOccupancyClip {
   tracks: Array<{ name: string }>
@@ -27,11 +44,13 @@ export interface PlayingGestureSpec {
   loop?: boolean
 }
 
-/** Strip `.quaternion` / path prefixes so VRMA `Normalized_Head` matches procedural `head`. */
+/**
+ * Canonical comparison token for a track target. Maps VRMA `Normalized_Head`,
+ * procedural `head` and VRoid `Normalized_J_Bip_C_Head` onto the same token so
+ * overlay/body classification and occupancy agree across clip sources.
+ */
 export function normalizeTrackTarget(trackName: string): string {
-  const target = trackName.replace(/\.[^.]+$/, '')
-  const leaf = target.split('/').pop() ?? target
-  return leaf.replace(/^normalized_/i, '').toLowerCase()
+  return resolveBoneToken(trackName)
 }
 
 export function trackOccupancy(clip: GestureOccupancyClip): string[] {
@@ -55,7 +74,7 @@ export function occupancyConflicts(a: readonly string[], b: readonly string[]): 
 }
 
 export function clipIsOverlay(occupied: readonly string[]): boolean {
-  return !occupied.some((name) => FULL_BODY_TARGET.test(name))
+  return !keysStanceBones(occupied)
 }
 
 export function logicalGestureId(id: string): string {

@@ -148,6 +148,21 @@ export type {
   CharacterActionStatus,
 } from './action-feed.js'
 export {
+  CANONICAL_BONES,
+  boneToken,
+  isCanonicalBone,
+  resolveBoneName,
+  resolveBoneToken,
+  trackNodeName,
+  vroidBoneNodeName,
+} from './bone-names.js'
+export {
+  GESTURE_CATALOG,
+  catalogLayer,
+  diffCatalogEntry,
+} from './gesture-catalog.js'
+export type { GestureCatalogEntry } from './gesture-catalog.js'
+export {
   checkRigCompatibility,
   clipBoneTargets,
   createPoseGuard,
@@ -199,6 +214,8 @@ export {
   decideGestureOverlap,
   logicalGestureId,
   clipIsOverlay,
+  keysStanceBones,
+  STANCE_BONE_TOKENS,
   trackOccupancy,
   MAX_GESTURE_QUEUE,
 } from './gesture-overlap.js'

@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import { VRMHumanBoneName, type VRM } from '@pixiv/three-vrm'
+import { boneToken } from './bone-names.ts'
+import { keysStanceBones } from './gesture-overlap.ts'
 
 type BoneName = (typeof VRMHumanBoneName)[keyof typeof VRMHumanBoneName]
 
@@ -106,14 +108,11 @@ export function assignClipUserData(
   Object.assign(clip.userData, data)
 }
 
-const FULL_BODY_BONE = /^(hips|spine|chest|upperChest|leftUpperLeg|rightUpperLeg)/
-
 /** Overlay clips keep idle on unkeyed bones (nod / scratch). */
 export function proceduralFramesAreOverlay(bones: Iterable<BoneName>): boolean {
-  for (const bone of bones) {
-    if (FULL_BODY_BONE.test(bone)) return false
-  }
-  return true
+  const tokens: string[] = []
+  for (const bone of bones) tokens.push(boneToken(bone))
+  return !keysStanceBones(tokens)
 }
 
 /** Bones the fallback idle loop keys so the mixer never sits on bind T-pose. */

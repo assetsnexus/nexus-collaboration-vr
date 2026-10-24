@@ -625,10 +625,20 @@ export class CharacterController {
     this.gestureQueue = []
     this.pendingOverlayIdleRestore = false
     this.humanoidRest = captureHumanoidRestQuats(vrm)
+    // Canonical tokens for both the VRM enum names and the actual node names.
+    // A VRoid rig names its nodes `J_Bip_L_UpperArm`, and a retargeted VRMA can
+    // key `Normalized_<node.name>`; folding both through the shared resolver
+    // keeps the guard comparing like with like instead of refusing every clip.
+    const rigNodes: Array<{ name?: string } | null | undefined> = []
+    for (const bone of Object.values(VRMHumanBoneName)) {
+      const node = vrm.humanoid?.getNormalizedBoneNode(bone as VRMHumanBoneName)
+      if (node) rigNodes.push(node)
+    }
     this.rigBones = new Set(
       rigBoneNames(
         (bone) => vrm.humanoid?.getNormalizedBoneNode(bone as VRMHumanBoneName),
         Object.values(VRMHumanBoneName),
+        rigNodes,
       ),
     )
     this.guard = createPoseGuard()
@@ -834,7 +844,13 @@ export class CharacterController {
     } else if (prevIdle && prevIdle !== next) {
       prevIdle.crossFadeTo(next, Math.max(0, crossFade), false)
     }
-    next.reset().play()
+    next.reset()
+    // A reused action can still carry a faded-down / halted base weight; the
+    // rest loop is the base pose, so it must come back at full weight.
+    next.enabled = true
+    next.weight = 1
+    next.setEffectiveWeight(1)
+    next.play()
     this.currentAction = next
     this.currentGestureId = resolved
     this.syncSeatVisibility()
@@ -1131,6 +1147,11 @@ export class CharacterController {
     next.setLoop(THREE.LoopOnce, 1)
     next.clampWhenFinished = true
     next.timeScale = 1
+    // See playBodyGesture: a halted action carries weight 0 through reset().
+    next.enabled = true
+    next.paused = false
+    next.weight = 1
+    next.setEffectiveWeight(1)
     if (this.currentAction && this.currentAction !== next) {
       this.currentAction.crossFadeTo(next, crossFade, false)
     }
@@ -1253,8 +1274,11 @@ export class CharacterController {
     this.fadingActions.delete(action)
     action.stop()
     action.enabled = false
-    action.weight = 0
     action.setEffectiveWeight(0)
+    // Deliberately do NOT zero `action.weight`: three's `reset()` leaves that
+    // base weight untouched, so zeroing it would make every future play of this
+    // action fade in from `0 × ramp = 0` (silent, frozen pose). The effective
+    // weight is 0 while stopped; the play sites set `weight = 1` before fading in.
   }
 
   private tickFadingActions(): void {
@@ -1579,6 +1603,14 @@ export class CharacterController {
     next.setLoop(looping ? THREE.LoopRepeat : THREE.LoopOnce, looping ? Infinity : 1)
     next.clampWhenFinished = !looping
     next.timeScale = timeScale
+    // Restore the base weight before fading in. `haltAction` writes
+    // `action.weight = 0` to silence a clip, and three's `reset()` does NOT
+    // restore it — so a replayed body clip would fade in as `0 × ramp = 0` and
+    // leave the rig frozen on the (now faded-out) idle instead of performing.
+    next.enabled = true
+    next.paused = false
+    next.weight = 1
+    next.setEffectiveWeight(1)
     if (!keepOverlays) {
       if (this.currentAction && this.currentAction !== next) {
         this.currentAction.crossFadeTo(next, crossFade, false)
@@ -1692,7 +1724,10 @@ export class CharacterController {
         this.fadeOutAction(this.currentAction, fade)
       } else {
         this.idleAction.enabled = true
-        this.idleAction.reset().play()
+        this.idleAction.reset()
+        this.idleAction.weight = 1
+        this.idleAction.setEffectiveWeight(1)
+        this.idleAction.play()
         this.currentAction.crossFadeTo(this.idleAction, fade, false)
       }
     }
@@ -2152,6 +2187,9 @@ export class CharacterController {
     const resolved = resolveGestureVariant(id, this.gestures.keys(), { preferExact })
     const g = this.gestures.get(resolved)
     if (!g) {
+      // A catalog id with no clip (renamed/removed asset, failed VRMA download)
+      // must degrade to a no-op on the base pose — never leave the previous
+      // gesture frozen. Keep the current rest loop and warn clearly.
       this.logger.warn?.('[character-kit] unknown gesture', id, '→', resolved)
       return 'skipped'
     }

@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { VRMHumanBoneName, type VRM } from '@pixiv/three-vrm'
+import { resolveBoneToken } from './bone-names.ts'
 
 export interface BoneRestHold {
   bone: string
@@ -15,11 +16,9 @@ export interface HumanoidRestSource {
   } | null
 }
 
-/** Same mapping as `normalizeTrackTarget` — keep the two in lockstep. */
+/** Same mapping as `normalizeTrackTarget` — both go through the shared resolver. */
 function restTrackBone(trackName: string): string {
-  const target = trackName.replace(/\.[^.]+$/, '')
-  const leaf = target.split('/').pop() ?? target
-  return leaf.replace(/^normalized_/i, '').toLowerCase()
+  return resolveBoneToken(trackName)
 }
 
 /** Bind-pose quaternions for every normalized humanoid bone. Capture before clips play. */
