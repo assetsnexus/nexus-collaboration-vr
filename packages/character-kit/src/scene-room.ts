@@ -962,6 +962,26 @@ export class SceneRoom {
     return state.director.runToolCall(resolveCharacterToolName(name), args)
   }
 
+  /**
+   * Hard-reset one occupant (or every occupant) to the idle rest pose. The
+   * escape hatch behind the scene "Reset pose" action and the auto-recovery
+   * guard: no clip is left holding weight.
+   */
+  resetAvatarPose(id?: string | null, reason = 'manual'): boolean {
+    if (id) {
+      const state = this.avatars.get(id)
+      if (!state) return false
+      state.controller.resetToIdlePose(reason)
+      return true
+    }
+    let any = false
+    for (const state of this.avatars.values()) {
+      state.controller.resetToIdlePose(reason)
+      any = true
+    }
+    return any
+  }
+
   setAvatarMood(
     id: string,
     mood: string,

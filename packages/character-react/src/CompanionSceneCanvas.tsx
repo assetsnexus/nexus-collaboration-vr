@@ -44,6 +44,11 @@ export type CompanionSceneHost = {
   onAction: (listener: (ev: CharacterActionEvent) => void) => () => void
   pausePresence: (reason?: string) => void
   resumePresence: () => void
+  /**
+   * Hard-reset this occupant to its idle rest pose (scene "Reset pose" action +
+   * auto-recovery). Safe to call any time; halts any clip still holding weight.
+   */
+  resetPose: (reason?: string) => void
   /** OS-global cursor feed: push gaze NDC / route gaze through the external feed. */
   setPointerNdc: (x: number, y: number) => void
   setExternalPointerEnabled: (on: boolean) => void
@@ -228,6 +233,13 @@ export function createCompanionSceneHost(
     },
     resumePresence: () => {
       room.getAvatar(occupantId)?.director.resumePresence()
+    },
+    resetPose: (reason = 'manual') => {
+      const handle = room.getAvatar(occupantId)
+      if (!handle) return
+      handle.director.pausePresence('reset_pose')
+      handle.controller.resetToIdlePose(reason)
+      handle.director.resumePresence()
     },
     speakWithLipSync: (stream, ctx) => room.speakWithLipSync(occupantId, stream, ctx),
     stopLipSync: () => room.stopLipSync(occupantId),

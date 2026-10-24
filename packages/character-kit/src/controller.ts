@@ -46,6 +46,16 @@ import {
   type BoneRestHold,
 } from './idle-rest-tracks.js'
 import { applyRelaxedRestPose, buildProceduralGestureClips } from './procedural-gestures.js'
+import {
+  checkRigCompatibility,
+  createPoseGuard,
+  detectStuckPose,
+  GUARD_MIN_WEIGHT,
+  GUARD_OVERRUN_GRACE_SEC,
+  rigBoneNames,
+  type GuardActionSnapshot,
+  type StuckVerdict,
+} from './animation-guard.js'
 import { reAnchorRootPositionTrack } from './reanchor.js'
 import { V_SIGN_SHORT_ID, shortenVSignClip } from './clip-time-remap.js'
 import {
@@ -268,6 +278,19 @@ export class CharacterController {
   private idlePulseEnabled = false
   private readonly idlePulse: IdleScalePulseState = createIdleScalePulse()
   private seat: THREE.Mesh | null = null
+  /**
+   * Normalized names of every humanoid bone this rig actually has (captured at
+   * load). Gestures keying far more than this are refused instead of leaving the
+   * skeleton half-driven.
+   */
+  private rigBones = new Set<string>()
+  /**
+   * Watchdog that notices a pose the controller cannot leave on its own (an
+   * orphan action holding weight, a one-shot that outlived its clip) and forces
+   * the idle rest loop back. Cheap: it only samples every
+   * {@link GUARD_SAMPLE_INTERVAL_MS}.
+   */
+  private guard: ReturnType<typeof createPoseGuard> | null = null
   private readonly face = new FaceBlendController()
   private raf = 0
   private disposed = false
@@ -602,6 +625,13 @@ export class CharacterController {
     this.gestureQueue = []
     this.pendingOverlayIdleRestore = false
     this.humanoidRest = captureHumanoidRestQuats(vrm)
+    this.rigBones = new Set(
+      rigBoneNames(
+        (bone) => vrm.humanoid?.getNormalizedBoneNode(bone as VRMHumanBoneName),
+        Object.values(VRMHumanBoneName),
+      ),
+    )
+    this.guard = createPoseGuard()
     this.restPaddedClips = new WeakMap()
     this.fadingActions.clear()
     this.pendingGestureEndGlance = false
@@ -739,6 +769,15 @@ export class CharacterController {
       return
     }
 
+    // Standing up from the sit rest loop must stop the sit action itself, not
+    // only crossfade away from it. `clearSitRest` owns that (padded-clip lookup,
+    // seat sync, current-action adopt); delegating keeps both paths in lockstep
+    // and is what makes the "stuck half-seated pose" impossible.
+    if (leavingSit && resolved === 'idle' && this.gestures.has('sit')) {
+      this.clearSitRest()
+      return
+    }
+
     const next = this.mixer.clipAction(nextClip)
     next.setLoop(THREE.LoopRepeat, Infinity)
     next.clampWhenFinished = false
@@ -808,18 +847,34 @@ export class CharacterController {
     })
   }
 
+  /** True when this action is the id's rest loop (padded clip) or its one-shot. */
+  private isActionForGesture(action: THREE.AnimationAction, id: string): boolean {
+    const g = this.gestures.get(id)
+    if (!g) return false
+    const clip = action.getClip()
+    if (clip === g.clip) return true
+    return this.restPaddedClips.get(g.clip) === clip
+  }
+
   /**
-   * Point the rest loop at standing idle without playing it. Used when sit
-   * must not come back after walk/wave, while another clip is already current.
+   * Every mixer action a gesture id could be playing from.
+   *
+   * Rest loops (idle / sit) play the *rest-padded* clone of a clip
+   * (`ensureRestPaddedClip`), which is a different `AnimationClip` object than
+   * the one held in `gestures`. `mixer.existingAction(rawClip)` therefore returns
+   * null for a rest loop, and a lookup that misses the padded clip leaves the sit
+   * action running at full weight forever — the "avatar stuck in a sit pose" bug.
    */
-  private stopClipIfPlaying(clip: THREE.AnimationClip | undefined): void {
-    if (!clip || !this.mixer) return
-    const action = this.mixer.existingAction(clip)
-    if (!action) return
-    action.stop()
-    action.enabled = false
-    action.weight = 0
-    action.setEffectiveWeight(0)
+  private actionsForGesture(id: string): THREE.AnimationAction[] {
+    if (!this.mixer) return []
+    const g = this.gestures.get(id)
+    if (!g) return []
+    const out = new Set<THREE.AnimationAction>()
+    const raw = this.mixer.existingAction(g.clip)
+    if (raw) out.add(raw)
+    const padded = this.mixer.existingAction(this.ensureRestPaddedClip(g.clip))
+    if (padded) out.add(padded)
+    return [...out]
   }
 
   clearSitRest(): void {
@@ -827,23 +882,204 @@ export class CharacterController {
     if (!this.mixer) return
     const g = this.gestures.get('idle')
     if (!g) return
-    this.stopClipIfPlaying(this.gestures.get('sit')?.clip)
-    this.stopClipIfPlaying(this.gestures.get('sit_wave')?.clip)
+    const prevIdle = this.idleAction
+    const prevIsSit = Boolean(prevIdle && this.isActionForGesture(prevIdle, 'sit'))
+    // Halt every sit action the mixer holds — a slot action (sit_wave fidget) or
+    // a stray raw/padded sit clip — except the one currently fading out as the
+    // rest loop, which gets a proper crossfade instead.
+    const sitActions = new Set<THREE.AnimationAction>()
+    const collect = (action: THREE.AnimationAction | null | undefined) => {
+      if (action && action !== prevIdle) sitActions.add(action)
+    }
+    if (this.bodySlot && isSitGestureId(this.bodySlot.id)) collect(this.bodySlot.action)
+    for (const slot of this.overlaySlots) {
+      if (isSitGestureId(slot.id)) collect(slot.action)
+    }
+    for (const id of ['sit', 'sit_wave']) {
+      for (const action of this.actionsForGesture(id)) collect(action)
+    }
+    for (const action of sitActions) this.haltAction(action)
+
     const next = this.mixer.clipAction(this.ensureRestPaddedClip(g.clip))
     next.setLoop(THREE.LoopRepeat, Infinity)
     next.clampWhenFinished = false
+    next.enabled = true
+    next.paused = false
     next.timeScale = this.idleTimeScaleCenter
-    const prev = this.idleAction
     this.idleAction = next
     this.idleLoopId = 'idle'
-    if (prev && prev !== next && prev !== this.currentAction) {
-      prev.fadeOut(0.15)
+    if (prevIdle && prevIdle !== next) {
+      if (prevIsSit && prevIdle === this.currentAction) {
+        this.fadingActions.add(prevIdle)
+        prevIdle.clampWhenFinished = true
+        prevIdle.crossFadeTo(next, 0.15, false)
+      } else if (prevIdle === this.currentAction) {
+        prevIdle.crossFadeTo(next, 0.15, false)
+      } else {
+        this.fadeOutAction(prevIdle, 0.15)
+      }
     }
+    // Adopt idle as the current action and make sure it actually runs: pointing
+    // `idleAction` at a stopped action left the rig on the sit pose forever.
+    next.weight = 1
+    next.setEffectiveWeight(1)
+    next.reset().play()
+    this.currentAction = next
+    this.currentGestureId = 'idle'
+    this.bodySlot = null
     this.vrm?.humanoid?.resetNormalizedPose()
     this.syncSeatVisibility()
     this.logger.info?.('[character-kit] clear sit rest', {
+      stopped: sitActions.size,
       current: this.currentGestureId,
     })
+  }
+
+  /** Normalized humanoid bones this rig actually has (empty until a VRM loads). */
+  getRigBones(): string[] {
+    return [...this.rigBones]
+  }
+
+  /**
+   * Whether a clip can be expressed by this rig. Unknown rigs pass (a VRM that
+   * has not reported bones yet must not block a gesture).
+   */
+  isRigCompatible(clip: THREE.AnimationClip): boolean {
+    return checkRigCompatibility(clip, this.rigBones).compatible
+  }
+
+  /**
+   * Snapshot the mixer in the shape {@link detectStuckPose} understands. A
+   * running action is "tracked" when the controller owns it (idle loop, overlay
+   * slot, body slot, walk clip, or an in-flight fade-out); anything else holding
+   * weight is an orphan nobody will ever stop.
+   */
+  poseSnapshot(): GuardActionSnapshot[] {
+    if (!this.mixer) return []
+    const owned = new Set<THREE.AnimationAction>()
+    const add = (action: THREE.AnimationAction | null | undefined) => {
+      if (action) owned.add(action)
+    }
+    add(this.idleAction)
+    add(this.overlayIdleMask)
+    add(this.currentAction)
+    add(this.walkAction)
+    for (const slot of this.overlaySlots) add(slot.action)
+    add(this.bodySlot?.action)
+    for (const action of this.fadingActions) add(action)
+
+    const actions = (this.mixer as unknown as { _actions?: THREE.AnimationAction[] })._actions ?? []
+    const snapshots: GuardActionSnapshot[] = []
+    for (const action of actions) {
+      const clip = action.getClip()
+      if (!clip) continue
+      snapshots.push({
+        key: `${clip.name}#${clip.tracks.length}`,
+        clipName: clip.name,
+        loop: action.loop === THREE.LoopRepeat,
+        clampWhenFinished: action.clampWhenFinished,
+        running: action.isRunning(),
+        effectiveWeight: action.getEffectiveWeight(),
+        time: action.time,
+        durationSec: clip.duration,
+        tracked: owned.has(action),
+        stance: !clipIsOverlay(trackOccupancy(clip)),
+        idle: action === this.idleAction,
+      })
+    }
+    return snapshots
+  }
+
+  /** Current stuck verdict (does not recover; see {@link recoverPose}). */
+  detectStuckPose(opts: { minWeight?: number; overrunGraceSec?: number } = {}): StuckVerdict {
+    return detectStuckPose(this.poseSnapshot(), {
+      minWeight: opts.minWeight ?? GUARD_MIN_WEIGHT,
+      overrunGraceSec: opts.overrunGraceSec ?? GUARD_OVERRUN_GRACE_SEC,
+    })
+  }
+
+  /**
+   * Hard reset to the idle rest pose: halt every mixer action that is not the
+   * idle loop, drop queued gestures and locomotion, snap the humanoid to its
+   * relaxed rest pose, and restart the idle loop instantly.
+   *
+   * This is the escape hatch behind "Reset pose" and the auto-recovery target,
+   * so it must be idempotent and safe to call at any time.
+   */
+  resetToIdlePose(reason = 'manual'): void {
+    if (!this.mixer) return
+    this.gestureQueue = []
+    this.drainingGestureQueue = false
+    this.stopLocomotion()
+    this.restReturn.cancel()
+    this.pendingOverlayIdleRestore = false
+    this.pendingGestureEndGlance = false
+
+    const keep = new Set<THREE.AnimationAction>()
+    const idleEntry = this.gestures.get(this.idleLoopId) ?? this.gestures.get('idle')
+    const idleClip =
+      this.idleLoopId === 'sit'
+        ? this.gestures.get('sit')?.clip
+        : idleEntry?.clip
+    if (idleClip) keep.add(this.mixer.clipAction(this.ensureRestPaddedClip(idleClip)))
+    if (this.idleAction) keep.add(this.idleAction)
+
+    for (const slot of this.overlaySlots) this.haltAction(slot.action)
+    this.overlaySlots = []
+    if (this.bodySlot) {
+      this.haltAction(this.bodySlot.action)
+      this.bodySlot = null
+    }
+    if (this.overlayIdleMask) {
+      this.haltAction(this.overlayIdleMask)
+      this.overlayIdleMask = null
+    }
+    for (const action of [...this.fadingActions]) this.haltAction(action)
+    this.fadingActions.clear()
+
+    const actions = (this.mixer as unknown as { _actions?: THREE.AnimationAction[] })._actions ?? []
+    for (const action of actions) {
+      if (keep.has(action)) continue
+      if (!action.enabled && action.getEffectiveWeight() <= 0.001) continue
+      this.haltAction(action)
+    }
+
+    this.bodySlot = null
+    this.walkAction = null
+    this.walkClipActive = false
+    this.walkClipId = null
+    this.currentAction = null
+    this.currentGestureId = null
+    this.idleAction = null
+    this.idleLoopId = 'idle'
+
+    if (this.vrm) applyRelaxedRestPose(this.vrm)
+    this.vrm?.humanoid?.resetNormalizedPose()
+    if (this.gestures.has('idle')) {
+      this.setIdleLoop('idle', { crossFade: 0 })
+    }
+    this.guard?.reset()
+    this.syncSeatVisibility()
+    this.emit({ type: 'character.pose_reset', region: reason, at: Date.now() })
+    this.logger.info?.('[character-kit] reset pose', {
+      reason,
+      gestures: this.listGestures().length,
+    })
+  }
+
+  /** Auto-recovery entry point used by the watchdog when a pose is stuck. */
+  recoverPose(verdict: StuckVerdict): void {
+    this.logger.warn?.('[character-kit] auto-recovering stuck pose', verdict.detail)
+    this.resetToIdlePose('auto_recover')
+  }
+
+  /** Sample the mixer and auto-recover when a stuck pose persists. */
+  private tickPoseGuard(nowMs: number): void {
+    const guard = this.guard
+    if (!guard || !this.mixer || !this.vrm) return
+    if (!guard.due(nowMs)) return
+    const verdict = this.detectStuckPose()
+    if (guard.observe(nowMs, verdict)) this.recoverPose(verdict)
   }
 
   setIdleTimeScale(center: number): void {
@@ -1396,6 +1632,20 @@ export class CharacterController {
       timeScale !== undefined && Number.isFinite(timeScale) && timeScale > 0
         ? Math.min(4, Math.max(0.25, timeScale))
         : defaultGestureTimeScale(resolved)
+    // Refuse a clip the rig cannot express: a retargeted VRMA played against a
+    // model missing those bones leaves the skeleton half-driven (contorted
+    // T-pose). Falling back to idle is always better than a broken pose.
+    const compat = checkRigCompatibility(g.clip, this.rigBones)
+    if (!compat.compatible) {
+      this.logger.warn?.('[character-kit] gesture incompatible with rig', {
+        id: resolved,
+        reason: compat.reason,
+        coverage: Number(compat.coverage.toFixed(2)),
+        missing: compat.missing.slice(0, 8),
+      })
+      if (this.currentAction !== this.idleAction) this.setIdleLoop('idle', { crossFade })
+      return
+    }
     const occupied = trackOccupancy(g.clip)
     const overlay = Boolean(g.overlay) || clipIsOverlay(occupied)
     if (overlay) {
@@ -3500,6 +3750,7 @@ export class CharacterController {
     }
     this.gaze.preMixer(this.vrm)
     this.mixer?.update(delta)
+    this.tickPoseGuard(performance.now())
     this.restReturn.update(delta)
     this.tickFadingActions()
     this.gaze.update({

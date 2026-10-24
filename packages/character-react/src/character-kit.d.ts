@@ -188,6 +188,8 @@ declare module '@nexus/character-kit' {
     ): Promise<{ displayText: string; ttsText: string }>
     pausePresence(reason?: string): void
     resumePresence(): void
+    /** Hard-reset the pose: halt every clip holding weight, return to idle. */
+    resetPose(reason?: string): void
     dispose(): void
   }
 
@@ -303,6 +305,10 @@ declare module '@nexus/character-kit' {
       listGestures: () => string[]
       listLoadedGestures: () => LoadedGestureInfo[]
       isIdlePlaying: () => boolean
+      /** Hard-reset the pose: halt every clip holding weight, return to idle. */
+      resetToIdlePose: (reason?: string) => void
+      /** Whether a clip can be expressed by this rig (guards retargeted VRMA). */
+      isRigCompatible: (clip: unknown) => boolean
     }
     director: {
       getPresence: () => { setMood: (mood: string) => boolean }
@@ -337,6 +343,8 @@ declare module '@nexus/character-kit' {
     listAvatarGestures(id: string): string[]
     listLoadedAvatarGestures(id: string): LoadedGestureInfo[]
     isAvatarIdlePlaying(id: string): boolean
+    /** Hard-reset one occupant (or all) to the idle rest pose. */
+    resetAvatarPose(id?: string | null, reason?: string): boolean
     onAction(listener: (ev: CharacterActionEvent) => void): () => void
     speakWithLipSync(id: string, mediaStream: MediaStream, audioContext?: AudioContext): Promise<void>
     stopLipSync(id?: string): void

@@ -446,6 +446,20 @@ export class CompanionHost {
     this.director.setAgentId(agentId)
   }
 
+  /**
+   * Reset the avatar to its idle rest pose: halt any clip that is still holding
+   * weight (an interrupted gesture, a stuck sit rest) and restart idle. The
+   * companion's "Reset pose" action and the auto-recovery guard both land here.
+   */
+  resetPose(reason = 'manual'): void {
+    if (this.disposed) return
+    // Freeze ambient beats first so a presence tick does not immediately replay
+    // the very gesture that was stuck.
+    this.director.pausePresence('reset_pose')
+    this.controller.resetToIdlePose(reason)
+    this.director.resumePresence()
+  }
+
   setInteractionAck(partial: Partial<InteractionAckOptions>): void {
     this.interactionAck.setOptions(partial)
   }

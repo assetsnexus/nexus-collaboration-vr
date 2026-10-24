@@ -147,6 +147,27 @@ export type {
   CharacterActionSource,
   CharacterActionStatus,
 } from './action-feed.js'
+export {
+  checkRigCompatibility,
+  clipBoneTargets,
+  createPoseGuard,
+  detectStuckPose,
+  GUARD_MAX_STANCE_WEIGHT_SUM,
+  GUARD_MIN_WEIGHT,
+  GUARD_OVERRUN_GRACE_SEC,
+  GUARD_RECOVER_COOLDOWN_MS,
+  GUARD_SAMPLE_INTERVAL_MS,
+  GUARD_STUCK_SAMPLES,
+  rigBoneNames,
+} from './animation-guard.js'
+export type {
+  GuardActionSnapshot,
+  RigCompatVerdict,
+  StuckDetectOptions,
+  StuckReason,
+  StuckVerdict,
+} from './animation-guard.js'
+export { RIG_COMPAT_MIN_BONES, RIG_COMPAT_MIN_COVERAGE } from './animation-guard.js'
 export { IdlePresenceDirector } from './idle-presence.js'
 export type { IdlePresenceOptions, PresenceTier } from './idle-presence.js'
 export {

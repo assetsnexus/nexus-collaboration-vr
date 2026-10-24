@@ -101,6 +101,8 @@ export type CharacterEventType =
   | 'character.touched'
   | 'character.gesture_end'
   | 'character.speak_end'
+  /** The pose was hard-reset to idle (manual "Reset pose" or auto-recovery). */
+  | 'character.pose_reset'
 
 export interface CharacterEvent {
   type: CharacterEventType
