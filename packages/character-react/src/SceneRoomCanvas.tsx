@@ -45,6 +45,11 @@ export function SceneRoomCanvas({
   )
   const onPhoneVrStatusRef = useRef(onPhoneVrStatus)
   onPhoneVrStatusRef.current = onPhoneVrStatus
+  // Held in a ref, not an effect dep: callers pass inline arrows
+  // (`onRoomReady={(r) => setRoomHost(...)}`), and depending on their identity
+  // would tear down and rebuild the whole SceneRoom on every render.
+  const onRoomReadyRef = useRef(onRoomReady)
+  onRoomReadyRef.current = onRoomReady
 
   useEffect(() => {
     ensureAvatarAssetCacheBridge()
@@ -61,16 +66,16 @@ export function SceneRoomCanvas({
     roomRef.current = next
     setRoom(next)
     const offProgress = next.onLoadProgress(setLoadProgress)
-    onRoomReady?.(next)
+    onRoomReadyRef.current?.(next)
     return () => {
       offProgress()
       next.dispose()
       roomRef.current = null
       setRoom(null)
       setLoadProgress(emptyAvatarAssetLoadProgress())
-      onRoomReady?.(null)
+      onRoomReadyRef.current?.(null)
     }
-  }, [gestureManifestUrl, roomOptions, onRoomReady])
+  }, [gestureManifestUrl, roomOptions])
 
   useEffect(() => {
     const r = roomRef.current
