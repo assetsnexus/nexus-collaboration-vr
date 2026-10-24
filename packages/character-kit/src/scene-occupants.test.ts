@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  isOccupantFallbackUrl,
   isOccupantLoadCancelled,
   isStaleOccupantLoad,
   occupantPresentUrl,
+  occupantRenderUrl,
   occupantRosterKey,
   occupantWorldPose,
   resolveOccupantSpawnPose,
+  OCCUPANT_FALLBACK_VRM,
   OCCUPANT_LOAD_CANCELLED,
 } from "./scene-occupants.ts";
 
@@ -15,6 +18,24 @@ describe("scene-occupants", () => {
     assert.equal(occupantPresentUrl({ present: true, vrmUrl: "/a.vrm" }), "/a.vrm");
     assert.equal(occupantPresentUrl({ present: false, vrmUrl: "/a.vrm" }), "");
     assert.equal(occupantPresentUrl(undefined), "");
+  });
+
+  it("falls back to the platform sample for a present occupant with no VRM", () => {
+    // A present agent always gets a body so it spawns instead of vanishing.
+    assert.equal(occupantRenderUrl({ present: true, vrmUrl: null }), OCCUPANT_FALLBACK_VRM);
+    assert.equal(occupantRenderUrl({ present: true }), OCCUPANT_FALLBACK_VRM);
+    assert.equal(occupantRenderUrl({ present: true, vrmUrl: "  " }), OCCUPANT_FALLBACK_VRM);
+    // Its own configured VRM always wins over the sample.
+    assert.equal(occupantRenderUrl({ present: true, vrmUrl: "/a.vrm" }), "/a.vrm");
+    // An absent participant still resolves to "" so its stale avatar is dropped.
+    assert.equal(occupantRenderUrl({ present: false, vrmUrl: "/a.vrm" }), "");
+    assert.equal(occupantRenderUrl(undefined), "");
+  });
+
+  it("flags only the platform sample as the fallback URL", () => {
+    assert.equal(isOccupantFallbackUrl(OCCUPANT_FALLBACK_VRM), true);
+    assert.equal(isOccupantFallbackUrl("/a.vrm"), false);
+    assert.equal(isOccupantFallbackUrl(""), false);
   });
 
   it("treats a finished load as stale when the roster URL moved on", () => {

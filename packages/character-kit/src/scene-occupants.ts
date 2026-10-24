@@ -15,9 +15,41 @@ export type OccupantRosterFields = OccupantUrlFields & {
 
 export const OCCUPANT_LOAD_CANCELLED = 'SceneRoom occupant load cancelled'
 
+/** Same URL as `DEFAULT_SAMPLE_VRM`; mirrored here so this module stays Three-free. */
+export const OCCUPANT_FALLBACK_VRM =
+  'https://cdn.jsdelivr.net/gh/pixiv/three-vrm@dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm'
+
 export function occupantPresentUrl(occ: OccupantUrlFields | undefined): string {
   if (!occ?.present) return ''
   return occ.vrmUrl || ''
+}
+
+/**
+ * The URL a *present* occupant should actually render.
+ *
+ * A present participant with no configured `vrmUrl` still has a body: the
+ * companion / meeting stage must spawn the platform sample so the agent is
+ * visible and animated instead of silently vanishing until an avatar is picked
+ * in the gallery. Returning `''` here (only for absent participants) is what
+ * tells the reconcile loop to drop a stale avatar.
+ *
+ * Gated on `present` so a genuinely-absent participant still resolves to `''`
+ * and its avatar is torn down — this is a presence fallback, not a "keep every
+ * occupant forever" rule.
+ */
+export function occupantRenderUrl(occ: OccupantUrlFields | undefined): string {
+  if (!occ?.present) return ''
+  const configured = typeof occ.vrmUrl === 'string' ? occ.vrmUrl.trim() : ''
+  return configured || OCCUPANT_FALLBACK_VRM
+}
+
+/**
+ * Whether a present occupant's resolved URL is the platform sample rather than a
+ * per-agent `vrmUrl`. The asset gate treats platform URLs as always-downloadable,
+ * so the fallback never needs a catalog validation status.
+ */
+export function isOccupantFallbackUrl(url: string): boolean {
+  return url === OCCUPANT_FALLBACK_VRM
 }
 
 export function isStaleOccupantLoad(

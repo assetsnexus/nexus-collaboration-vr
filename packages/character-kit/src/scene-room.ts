@@ -31,10 +31,11 @@ import {
 import { layoutSpawnSlots, type SpawnSlot } from './spawn-slots.js'
 import { cameraPoseFacingAvatar, cameraYawTowardTarget } from './scene-camera.js'
 import {
+  isOccupantFallbackUrl,
   isOccupantLoadCancelled,
   isStaleOccupantLoad,
   normalizeOccupants,
-  occupantPresentUrl,
+  occupantRenderUrl,
   occupantWorldPose,
   resolveOccupantSpawnPose,
   OCCUPANT_LOAD_CANCELLED,
@@ -454,7 +455,10 @@ export class SceneRoom {
         this.removeAvatar(occ.id)
         continue
       }
-      const url = occupantPresentUrl(latest)
+      // A present occupant with no configured VRM still gets a body: fall back
+      // to the platform sample so the agent is visible/animated instead of
+      // vanishing from the stage until an avatar is chosen in the gallery.
+      const url = occupantRenderUrl(latest)
       const existing = this.avatars.get(latest.id)
       if (!url) {
         if (existing) this.removeAvatar(latest.id)
@@ -468,7 +472,9 @@ export class SceneRoom {
       if (existing) this.removeAvatar(latest.id)
       const download = mayAutoDownloadAvatarAsset({
         url,
-        validationStatus: latest.validationStatus,
+        // The sample VRM is a platform default (always allowed); only a real
+        // per-agent VRM needs the catalog validation status.
+        validationStatus: isOccupantFallbackUrl(url) ? 'verified' : latest.validationStatus,
       })
       if (!download.allow) {
         this.logger.warn?.('[character-kit] SceneRoom skipped unverified occupant VRM', {
@@ -688,7 +694,9 @@ export class SceneRoom {
     if (this.disposed) return true
     const latest = this.occupants.find((o) => o.id === config.id)
     if (!latest) return false
-    return isStaleOccupantLoad(occupantPresentUrl(latest), config.vrmUrl || '', this.disposed)
+    // Compare against the *render* URL so a sample-VRM fallback registered for a
+    // still-VRM-less occupant is not immediately treated as stale.
+    return isStaleOccupantLoad(occupantRenderUrl(latest), config.vrmUrl || '', this.disposed)
   }
 
   removeAvatar(id: string): boolean {
