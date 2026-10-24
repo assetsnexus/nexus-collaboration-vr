@@ -47,7 +47,8 @@ export type PhoneVrStatus = {
 export type PhoneVrHost = {
   scene: THREE.Scene
   camera: THREE.PerspectiveCamera
-  renderer: THREE.WebGLRenderer
+  /** Null when the window could not acquire a WebGL context (VR is then unavailable). */
+  renderer: THREE.WebGLRenderer | null
   /** Disable orbit / pointer look while VR is active. */
   setOrbitEnabled?: (enabled: boolean) => void
   setPointerLookEnabled?: (enabled: boolean) => void
@@ -170,6 +171,15 @@ export class PhoneVrController {
     if (this.disposed || this.mode !== 'flat') return this.getStatus()
     this.errorCode = null
     this.trackingStalled = false
+
+    // No WebGL context survived acquisition in this window (GPU saturated by
+    // other companion windows): there is nothing to render into, so fail with a
+    // precise, actionable message instead of a null-deref deeper down.
+    if (!this.host.renderer) {
+      this.errorCode = 'no_render_context'
+      this.emit()
+      return this.getStatus()
+    }
 
     if (!isSecure()) {
       this.errorCode = 'insecure_context'
@@ -297,6 +307,14 @@ export class PhoneVrController {
   }
 
   private async startImuStereo(): Promise<void> {
+    const renderer = this.host.renderer
+    if (!renderer) {
+      const err = new Error(phoneVrErrorMessage('no_render_context')) as Error & {
+        code: PhoneVrErrorCode
+      }
+      err.code = 'no_render_context'
+      throw err
+    }
     if (!hasOrientationApi()) {
       const err = new Error(phoneVrErrorMessage('no_gyroscope')) as Error & { code: PhoneVrErrorCode }
       err.code = 'no_gyroscope'
@@ -316,12 +334,12 @@ export class PhoneVrController {
     this.host.camera.fov = viewer.fovDeg
     this.host.camera.updateProjectionMatrix()
 
-    this.stereo = new PhoneVrStereoRenderer(this.host.renderer, {
+    this.stereo = new PhoneVrStereoRenderer(renderer, {
       ipdM: viewer.ipdM,
       distortion: viewer.distortion,
       distortionScale: 1,
     })
-    const canvas = this.host.renderer.domElement
+    const canvas = renderer.domElement
     this.stereo.setSize(canvas.clientWidth || canvas.width, canvas.clientHeight || canvas.height)
 
     this.host.setOrbitEnabled?.(false)

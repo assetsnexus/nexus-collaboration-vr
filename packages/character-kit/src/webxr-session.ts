@@ -153,6 +153,8 @@ export type PhoneVrErrorCode =
   | 'webxr_unavailable'
   | 'stereo_failed'
   | 'tracking_stalled'
+  /** The window never acquired a WebGL context, so stereo/immersive VR has no renderer. */
+  | 'no_render_context'
 
 export function phoneVrErrorMessage(code: PhoneVrErrorCode): string {
   switch (code) {
@@ -168,6 +170,8 @@ export function phoneVrErrorMessage(code: PhoneVrErrorCode): string {
       return 'Could not start stereo VR. Staying in flat view.'
     case 'tracking_stalled':
       return 'Head tracking looks frozen — check that the phone is awake and motion access is allowed.'
+    case 'no_render_context':
+      return 'This window has no 3D render context, so VR cannot start here. Close other companion windows and try again.'
     default:
       return 'VR could not start.'
   }

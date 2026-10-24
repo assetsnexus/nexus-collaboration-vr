@@ -47,6 +47,7 @@ import {
   type AvatarAssetLoadProgressListener,
 } from './load-progress.js'
 import { coercePresenceMoodId } from './presence-moods.js'
+import type { RendererStatus, RendererStatusListener } from './renderer-resilience.js'
 
 /**
  * Where the gesture catalogue came from. `procedural` means no manifest was
@@ -141,6 +142,20 @@ export class CompanionHost {
 
   getPresence() {
     return this.director.getPresence()
+  }
+
+  /**
+   * Subscribe to WebGL renderer status (`ok` | `lost` | `restored` | `failed`).
+   * Optional and additive: hosts that ignore it keep today's behaviour. Returns
+   * an unsubscribe function.
+   */
+  onRendererStatus(handler: RendererStatusListener): () => void {
+    return this.controller.onRendererStatus(handler)
+  }
+
+  /** Current renderer status (`{ state: 'ok' }` when all is well). */
+  getRendererStatus(): RendererStatus {
+    return this.controller.rendererStatus()
   }
 
   onAction(listener: (ev: CharacterActionEvent) => void): () => void {

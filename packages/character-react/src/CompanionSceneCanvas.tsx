@@ -9,6 +9,7 @@ import {
   type SceneRoomOccupant,
   type SceneRoomOptions,
   type ToolResult,
+  type RendererStatusListener,
 } from '@nexus/character-kit'
 import { AvatarLoadProgressBars } from './AvatarLoadProgressBars.js'
 import { ensureAvatarAssetCacheBridge } from './ensureAvatarAssetCacheBridge.js'
@@ -71,6 +72,11 @@ export type CompanionSceneCanvasProps = {
   style?: CSSProperties
   roomOptions?: Omit<SceneRoomOptions, 'logger' | 'onPhoneVrStatus' | 'soloStage'>
   onHostReady?: (host: CompanionSceneHost | null) => void
+  /**
+   * Optional WebGL renderer status feed (`ok` | `lost` | `restored` | `failed`).
+   * Purely additive: when omitted, behaviour is unchanged.
+   */
+  onRendererStatus?: RendererStatusListener
 }
 
 function occupantFromPresence(
@@ -103,12 +109,15 @@ export function CompanionSceneCanvas({
   style,
   roomOptions,
   onHostReady,
+  onRendererStatus,
 }: CompanionSceneCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const roomRef = useRef<SceneRoom | null>(null)
   const hostRef = useRef<CompanionSceneHost | null>(null)
   const onHostReadyRef = useRef(onHostReady)
   onHostReadyRef.current = onHostReady
+  const onRendererStatusRef = useRef(onRendererStatus)
+  onRendererStatusRef.current = onRendererStatus
   // Read the manifest once at room construction without re-creating the room on
   // every presence change (an occupant sync below handles avatar swaps).
   const presenceRef = useRef(presence)
@@ -131,11 +140,15 @@ export function CompanionSceneCanvas({
     })
     roomRef.current = room
     const offProgress = room.onLoadProgress(setLoadProgress)
+    const offRendererStatus = room.onRendererStatus((status) =>
+      onRendererStatusRef.current?.(status),
+    )
     const host = createCompanionSceneHost(room)
     hostRef.current = host
     onHostReadyRef.current?.(host)
     return () => {
       offProgress()
+      offRendererStatus()
       onHostReadyRef.current?.(null)
       hostRef.current = null
       roomRef.current = null

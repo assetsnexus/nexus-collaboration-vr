@@ -11,6 +11,31 @@ export type {
   AvatarAssetValidationStatus,
   AutoDownloadDecision,
 } from './avatar-asset-gate.js'
+export {
+  createContextRecovery,
+  createResilientRenderer,
+  defaultRendererFlavors,
+  contextAllowsRender,
+  contextNeedsFallbackNotice,
+  contextFallbackNotice,
+  contextCreationFailureReason,
+  isContextCreationErrorEvent,
+  isContextLostEvent,
+  isContextRestoredEvent,
+  RendererStatusSource,
+} from './renderer-resilience.js'
+export type {
+  ContextRecoveryHandle,
+  ContextRecoveryOptions,
+  ContextState,
+  CreateResilientRendererOptions,
+  RendererContextParams,
+  RendererFlavor,
+  RendererStatus,
+  RendererStatusListener,
+  RendererStatusState,
+  ResilientRenderer,
+} from './renderer-resilience.js'
 export { SceneRoom } from './scene-room.js'
 export type {
   SceneRoomAvatarConfig,

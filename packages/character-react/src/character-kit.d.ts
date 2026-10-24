@@ -47,6 +47,11 @@ declare module '@nexus/character-kit' {
 
   export function emptyAvatarAssetLoadProgress(): AvatarAssetLoadProgress
 
+  /** WebGL renderer status (`ok` | `lost` | `restored` | `failed`). */
+  export type RendererStatus = { state: 'ok' | 'lost' | 'restored' | 'failed'; message?: string }
+
+  export type RendererStatusListener = (status: RendererStatus) => void
+
   /** Action-feed source union (motion feed). */
   export type CharacterActionSource =
     | 'agent'
@@ -152,6 +157,9 @@ declare module '@nexus/character-kit' {
     stopLipSync(): void
     getLoadProgress(): AvatarAssetLoadProgress
     onLoadProgress(listener: AvatarAssetLoadProgressListener): () => void
+    /** Optional WebGL renderer status feed (context loss / restore / failure). */
+    onRendererStatus(handler: RendererStatusListener): () => void
+    getRendererStatus(): RendererStatus
     /** Plan Part C1: install / clear the embodiment profile. */
     setEmbodiment(
       profile: EmbodimentProfileV1 | Record<string, unknown> | null | undefined,
@@ -354,6 +362,9 @@ declare module '@nexus/character-kit' {
     resize(): void
     getLoadProgress(): AvatarAssetLoadProgress
     onLoadProgress(listener: AvatarAssetLoadProgressListener): () => void
+    /** Optional WebGL renderer status feed (context loss / restore / failure). */
+    onRendererStatus(handler: RendererStatusListener): () => void
+    rendererStatus(): RendererStatus
     dispose(): void
   }
 

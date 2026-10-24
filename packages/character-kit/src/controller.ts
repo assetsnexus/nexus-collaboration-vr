@@ -6,6 +6,14 @@ import { fetchCachedArrayBuffer, loadCachedGltf } from './asset-cache.js'
 import { vrmSceneIsRenderable } from './vrm-ready.js'
 import { loadVrmAnimations } from './vrma-loader.js'
 import {
+  contextAllowsRender,
+  createResilientRenderer,
+  type ContextRecoveryHandle,
+  type ContextState,
+  type RendererStatus,
+  type RendererStatusListener,
+} from './renderer-resilience.js'
+import {
   createVRMAnimationClip,
   VRMAnimationLoaderPlugin,
 } from '@pixiv/three-vrm-animation'
@@ -205,6 +213,17 @@ export class CharacterController {
   readonly scene: THREE.Scene
   readonly camera: THREE.PerspectiveCamera
   readonly renderer: THREE.WebGLRenderer | null
+  /**
+   * WebGL context loss/restore tracker for this controller's canvas. Null when
+   * the controller is embedded (an outer renderer owns the context) or when no
+   * context could be created. Hosts that manage their own loop can read
+   * {@link contextState} instead of touching the canvas directly.
+   */
+  private contextRecovery: ContextRecoveryHandle | null = null
+  /** Unbind for the context-loss/restore subscription (null when embedded). */
+  private unsubRendererStatus: (() => void) | null = null
+  /** Pixel-ratio cap so a post-restore resize re-applies the same value. */
+  private readonly maxPixelRatio: number
 
   private readonly clock = new THREE.Clock()
   private readonly lookTarget = new THREE.Object3D()
@@ -313,6 +332,9 @@ export class CharacterController {
     options: CharacterOptions = {},
   ) {
     this.embedded = Boolean(options.embed)
+    this.maxPixelRatio = Number.isFinite(options.maxPixelRatio)
+      ? Number(options.maxPixelRatio)
+      : 2
     this.agentId = options.agentId?.trim() || undefined
     this.scene = options.embed?.scene ?? new THREE.Scene()
     this.sceneRegistry = options.embed?.sceneRegistry ?? new SceneRegistry()
@@ -333,16 +355,43 @@ export class CharacterController {
     if (this.embedded) {
       this.renderer = null
     } else {
-      this.renderer = new THREE.WebGLRenderer({
-        canvas,
-        antialias: true,
-        alpha: false,
+      // Multi-window safety: retry through cheaper context flavours instead of
+      // throwing when the GPU process is saturated by other companion windows.
+      // A total failure leaves `renderer: null`, so this controller degrades to
+      // "no stage" rather than crashing the window — same contract as `embed`.
+      const acquired = createResilientRenderer<THREE.WebGLRenderer>({
+        canvas: canvas as unknown as { addEventListener?: Function; removeEventListener?: Function },
+        create: (params) =>
+          new THREE.WebGLRenderer({
+            canvas,
+            antialias: params.antialias,
+            alpha: params.alpha,
+            powerPreference: params.powerPreference,
+          }),
+        dispose: (renderer) => renderer.dispose(),
+        logger: this.logger,
+        onDegrade: ({ id, reason }) => {
+          this.logger.warn?.(
+            `[character-kit] WebGL context degraded to "${id}" (${reason ?? 'unknown'})`,
+          )
+        },
       })
-      this.renderer.setSize(w, h, false)
-      this.renderer.setPixelRatio(
-        Math.min(window.devicePixelRatio, options.maxPixelRatio ?? 2),
-      )
-      this.renderer.outputColorSpace = THREE.SRGBColorSpace
+      this.renderer = acquired.renderer
+      this.contextRecovery = acquired.renderer ? acquired.context : null
+      // Bind once so a loss stops the loop and a restore resumes it. Without
+      // this the loop keeps scheduling frames that three early-returns from,
+      // burning a stalled window's CPU for no pixels.
+      this.unsubRendererStatus = this.contextRecovery?.onStatus((status) => {
+        this.handleRendererStatus(status)
+      }) ?? null
+      if (!this.renderer) {
+        this.logger.warn?.(
+          '[character-kit] no WebGL context available; the 3D stage is disabled in this window',
+        )
+      }
+      this.renderer?.setSize(w, h, false)
+      this.renderer?.setPixelRatio(Math.min(window.devicePixelRatio, this.maxPixelRatio))
+      if (this.renderer) this.renderer.outputColorSpace = THREE.SRGBColorSpace
 
       const light = new THREE.DirectionalLight(0xffffff, 1.1)
       light.position.set(1.5, 2.5, 2)
@@ -3349,14 +3398,89 @@ export class CharacterController {
     this.renderer.setSize(w, h, false)
   }
 
+  /**
+   * Re-apply pixel ratio / size / colour space after a context restore. Unlike
+   * {@link applyResize} this always runs, because a restored context has the new
+   * buffer but not necessarily our previous renderer state.
+   */
+  private reapplyRendererState(): void {
+    if (this.disposed || this.embedded || !this.renderer) return
+    const w = this.canvas.clientWidth || 1
+    const h = this.canvas.clientHeight || 1
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.maxPixelRatio))
+    this.renderer.setSize(w, h, false)
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace
+    this.camera.aspect = w / h
+    this.camera.updateProjectionMatrix()
+  }
+
+  /**
+   * Current WebGL context state. `'unavailable'` means no context was ever
+   * granted (the stage cannot draw); `'lost'` is transient recovery.
+   */
+  contextState(): ContextState {
+    return this.contextRecovery?.state() ?? 'ready'
+  }
+
+  /** Subscribe to context loss/restore (drives fallback notices on the host). */
+  onContextStateChange(
+    listener: (state: ContextState, detail: { reason: string | null }) => void,
+  ): () => void {
+    return this.contextRecovery?.onStateChange(listener) ?? (() => {})
+  }
+
+  /**
+   * Subscribe to renderer status. Fires `ok` at subscribe time, then `lost` /
+   * `restored` as the GPU revokes and returns the context, or `failed` when no
+   * context could be created. Optional and additive: hosts that ignore it keep
+   * today's behaviour. Returns an unsubscribe function.
+   */
+  onRendererStatus(handler: RendererStatusListener): () => void {
+    if (!this.contextRecovery) {
+      handler({ state: 'ok' })
+      return () => {}
+    }
+    return this.contextRecovery.onStatus(handler)
+  }
+
+  /** Current renderer status without subscribing. */
+  rendererStatus(): RendererStatus {
+    return this.contextRecovery?.status() ?? { state: 'ok' }
+  }
+
+  /** Stop the loop on loss, restart it on restore. */
+  private handleRendererStatus(status: RendererStatus): void {
+    if (status.state === 'lost') {
+      // three guards `render()` internally, so pausing is purely a CPU win; the
+      // simulation stops too, which is fine while no pixels are being produced.
+      cancelAnimationFrame(this.raf)
+      this.raf = 0
+      return
+    }
+    if (status.state === 'restored') {
+      // three re-inits its GL state in its own restore listener; re-apply the
+      // host renderer state it does not own (pixel ratio, drawing-buffer size,
+      // colour space) rather than `applyResize`, which early-returns when the
+      // CSS box is unchanged.
+      this.reapplyRendererState()
+      if (!this.disposed && !this.embedded && !this.raf) {
+        this.raf = requestAnimationFrame(this.tick)
+      }
+    }
+  }
+
   private tick(): void {
     if (this.disposed) return
     this.raf = requestAnimationFrame(this.tick)
+    // A lost/unavailable context throws on every draw call; skip rendering (the
+    // simulation keeps running so nothing desyncs) until it is restored.
+    const canRender = !this.renderer || contextAllowsRender(this.contextState())
     try {
       this.stepSimulation(this.clock.getDelta())
     } catch (err) {
       this.logger.error?.('[character-kit] tick', err)
     }
+    if (!canRender) return
     try {
       this.renderer?.render(this.scene, this.camera)
     } catch (err) {
@@ -3476,7 +3600,11 @@ export class CharacterController {
     this.scene.remove(this.rig)
     this.logger.info?.('[character-kit] disposed', { url: this.vrmUrl })
     this.vrmUrl = null
+    this.unsubRendererStatus?.()
+    this.unsubRendererStatus = null
     this.renderer?.dispose()
+    this.contextRecovery?.dispose()
+    this.contextRecovery = null
     this.listeners.clear()
   }
 }

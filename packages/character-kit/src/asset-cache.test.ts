@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   DEFAULT_ASSET_TTL_MS,
+  FETCHED_AT_HEADER,
+  TTL_MS_HEADER,
   assetBodyLooksValid,
   assetFetchRetryDelayMs,
   assetLoadRatio,
   avatarAssetCacheKey,
   canonicalizePublicAssetUrl,
+  fetchCachedArrayBuffer,
   isAvatarAssetCacheEntryFresh,
   isRetryableAssetFetchError,
   resourcePathForUrl,
@@ -165,5 +168,122 @@ describe("withAssetFetchRetries", () => {
       /HTTP 404/,
     );
     assert.equal(n, 1);
+  });
+});
+
+/**
+ * Minimal in-memory stand-in for the Cache Storage bucket. Only the surface
+ * `fetchCachedArrayBuffer` touches is implemented (open/match/put/delete).
+ */
+function fakeCacheStorage(seed: Map<string, Response> = new Map()) {
+  const store = seed;
+  const puts: string[] = [];
+  const deletes: string[] = [];
+  const bucket = {
+    async match(key: string) {
+      return store.get(key) ?? undefined;
+    },
+    async put(key: string, value: Response) {
+      store.set(key, value);
+      puts.push(key);
+    },
+    async delete(key: string) {
+      deletes.push(key);
+      return store.delete(key);
+    },
+  };
+  (globalThis as { caches?: unknown }).caches = {
+    open: async () => bucket,
+  };
+  return { store, puts, deletes };
+}
+
+/** A valid GLB body: the `glTF` magic three's loader expects. */
+function glbBytes(payload = "...."): ArrayBuffer {
+  const u8 = new TextEncoder().encode(`glTF${payload}`);
+  return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+}
+
+/** A cached entry whose headers make it fresh, with a caller-chosen body. */
+function cachedEntry(body: ArrayBuffer, nowMs: number): Response {
+  return new Response(body, {
+    headers: {
+      "Content-Type": "model/gltf-binary",
+      [FETCHED_AT_HEADER]: String(nowMs),
+      [TTL_MS_HEADER]: String(DEFAULT_ASSET_TTL_MS),
+    },
+  });
+}
+
+describe("fetchCachedArrayBuffer concurrency safety", () => {
+  it("refetches when the cached body is corrupt, returning valid bytes", async () => {
+    const url = "https://cdn.example/avatar.vrm";
+    const key = avatarAssetCacheKey({ url });
+    const nowMs = 1_000_000;
+    // A half-written entry from another window: right headers, garbage body.
+    const { deletes } = fakeCacheStorage(
+      new Map([[key, cachedEntry(bytesOf("<!doctype html>"), nowMs)]]),
+    );
+
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      return new Response(glbBytes("BODY"), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const out = await fetchCachedArrayBuffer(url, { nowMs });
+      const magic = new TextDecoder().decode(new Uint8Array(out, 0, 4));
+      assert.equal(magic, "glTF", "must return the refetched valid body");
+      assert.equal(fetchCalls, 1, "a corrupt entry must trigger exactly one refetch");
+      assert.ok(deletes.includes(key), "the corrupt entry is deleted best-effort");
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete (globalThis as { caches?: unknown }).caches;
+    }
+  });
+
+  it("serves a valid cached body without refetching", async () => {
+    const url = "https://cdn.example/avatar.vrm";
+    const key = avatarAssetCacheKey({ url });
+    const nowMs = 1_000_000;
+    fakeCacheStorage(new Map([[key, cachedEntry(glbBytes("CACHED"), nowMs)]]));
+
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      return new Response(glbBytes("NETWORK"), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const out = await fetchCachedArrayBuffer(url, { nowMs });
+      assert.equal(new TextDecoder().decode(new Uint8Array(out, 0, 4)), "glTF");
+      assert.equal(fetchCalls, 0, "a fresh valid entry is a cache hit");
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete (globalThis as { caches?: unknown }).caches;
+    }
+  });
+
+  it("never writes an invalid body back to the cache", async () => {
+    const url = "https://cdn.example/avatar.vrm";
+    const key = avatarAssetCacheKey({ url });
+    const nowMs = 1_000_000;
+    const { puts } = fakeCacheStorage();
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(bytesOf("<!doctype html>"), { status: 200 })) as typeof fetch;
+    try {
+      await assert.rejects(
+        () => fetchCachedArrayBuffer(url, { nowMs }),
+        /empty or invalid body/,
+      );
+      assert.equal(puts.length, 0, "an invalid body must never be cached");
+      assert.equal(key && puts.includes(key), false);
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete (globalThis as { caches?: unknown }).caches;
+    }
   });
 });

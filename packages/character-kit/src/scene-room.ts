@@ -20,6 +20,14 @@ import {
 } from './scene-registry.js'
 import { SceneObjectLayer } from './scene-fx.js'
 import { SceneEventLog, type CompactSceneEvent } from './scene-events.js'
+import {
+  contextAllowsRender,
+  createResilientRenderer,
+  type ContextRecoveryHandle,
+  type ContextState,
+  type RendererStatus,
+  type RendererStatusListener,
+} from './renderer-resilience.js'
 import { layoutSpawnSlots, type SpawnSlot } from './spawn-slots.js'
 import { cameraPoseFacingAvatar, cameraYawTowardTarget } from './scene-camera.js'
 import {
@@ -146,8 +154,15 @@ const _labelBox = new THREE.Box3()
 export class SceneRoom {
   readonly scene: THREE.Scene
   readonly camera: THREE.PerspectiveCamera
-  readonly renderer: THREE.WebGLRenderer
+  /** Null when no WebGL context could be acquired (stage disabled in this window). */
+  readonly renderer: THREE.WebGLRenderer | null
   readonly labelRenderer: CSS2DRenderer
+  /** WebGL context loss/restore tracker (null when no context was granted). */
+  private contextRecovery: ContextRecoveryHandle | null = null
+  /** Unbind for the context-loss/restore subscription. */
+  private unsubRendererStatus: (() => void) | null = null
+  /** Pixel-ratio cap so a post-restore resize re-applies the same value. */
+  private readonly maxPixelRatio: number
 
   private readonly clock = new THREE.Clock()
   private readonly avatars = new Map<string, SceneRoomAvatarState>()
@@ -199,6 +214,9 @@ export class SceneRoom {
   constructor(canvas: HTMLCanvasElement, options: SceneRoomOptions = {}) {
     this.canvas = canvas
     this.logger = options.logger ?? console
+    this.maxPixelRatio = Number.isFinite(options.maxPixelRatio)
+      ? Number(options.maxPixelRatio)
+      : 2
     this.spacing = Number.isFinite(options.spacing) ? Number(options.spacing) : DEFAULT_SPACING
     this.pointerLookEnabled = options.pointerLook !== false
     this.onLabelClick = options.onLabelClick
@@ -220,14 +238,43 @@ export class SceneRoom {
     this.camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 100)
     this.camera.position.set(0, 1.55, 4.4)
 
-    this.renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      alpha: false,
+    // Multi-window safety: several companion windows can saturate the GPU
+    // process and make it refuse a context. Degrade through cheaper flavours
+    // rather than throwing, so one more stage always comes up. A total failure
+    // still leaves a room object (occupants/labels render nothing) instead of
+    // crashing the host window.
+    const acquired = createResilientRenderer<THREE.WebGLRenderer>({
+      canvas: canvas as unknown as { addEventListener?: Function; removeEventListener?: Function },
+      create: (params) =>
+        new THREE.WebGLRenderer({
+          canvas,
+          antialias: params.antialias,
+          alpha: params.alpha,
+          powerPreference: params.powerPreference,
+        }),
+      dispose: (renderer) => renderer.dispose(),
+      logger: this.logger,
+      onDegrade: ({ id, reason }) => {
+        this.logger.warn?.(
+          `[character-kit] SceneRoom WebGL context degraded to "${id}" (${reason ?? 'unknown'})`,
+        )
+      },
     })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, options.maxPixelRatio ?? 2))
-    this.renderer.setSize(width, height, false)
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace
+    this.renderer = acquired.renderer
+    this.contextRecovery = acquired.renderer ? acquired.context : null
+    if (!this.renderer) {
+      this.logger.warn?.(
+        '[character-kit] SceneRoom has no WebGL context; the 3D room is disabled in this window',
+      )
+    }
+    // Stop the RAF loop on loss and restart it on restore, so a stalled window
+    // does not keep scheduling frames three early-returns from.
+    this.unsubRendererStatus = this.contextRecovery?.onStatus((status) => {
+      this.handleRendererStatus(status)
+    }) ?? null
+    this.renderer?.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.maxPixelRatio))
+    this.renderer?.setSize(width, height, false)
+    if (this.renderer) this.renderer.outputColorSpace = THREE.SRGBColorSpace
 
     this.labelLayer = document.createElement('div')
     this.labelLayer.className = 'scene-room-labels'
@@ -282,6 +329,8 @@ export class SceneRoom {
       {
         scene: this.scene,
         camera: this.camera,
+        // Null when no context was granted; PhoneVrController reports
+        // `no_render_context` instead of dereferencing it.
         renderer: this.renderer,
         setOrbitEnabled: (enabled) => {
           if (this.controls) this.controls.enabled = enabled
@@ -1063,9 +1112,69 @@ export class SceneRoom {
     const height = this.canvas.clientHeight || 1
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
-    this.renderer.setSize(width, height, false)
+    this.renderer?.setSize(width, height, false)
     this.labelRenderer.setSize(width, height)
     this.phoneVr.resize(width, height)
+  }
+
+  /** Current WebGL context state (`'unavailable'` when no context was granted). */
+  contextState(): ContextState {
+    return this.contextRecovery?.state() ?? 'ready'
+  }
+
+  /** Subscribe to context loss/restore so a host can show a fallback notice. */
+  onContextStateChange(
+    listener: (state: ContextState, detail: { reason: string | null }) => void,
+  ): () => void {
+    return this.contextRecovery?.onStateChange(listener) ?? (() => {})
+  }
+
+  /**
+   * Subscribe to renderer status. Fires `ok` at subscribe time, then `lost` /
+   * `restored` / `failed`. Optional and additive; returns an unsubscribe.
+   */
+  onRendererStatus(handler: RendererStatusListener): () => void {
+    if (!this.contextRecovery) {
+      handler({ state: 'ok' })
+      return () => {}
+    }
+    return this.contextRecovery.onStatus(handler)
+  }
+
+  /** Current renderer status without subscribing. */
+  rendererStatus(): RendererStatus {
+    return this.contextRecovery?.status() ?? { state: 'ok' }
+  }
+
+  /** Stop the loop on loss, restart it on restore. */
+  private handleRendererStatus(status: RendererStatus): void {
+    if (status.state === 'lost') {
+      cancelAnimationFrame(this.animationFrame)
+      this.animationFrame = 0
+      return
+    }
+    if (status.state === 'restored') {
+      this.reapplyRendererState()
+      if (!this.disposed && !this.animationFrame) {
+        this.animationFrame = requestAnimationFrame(this.tick)
+      }
+    }
+  }
+
+  /**
+   * Re-apply pixel ratio / size / colour space after a context restore. Unlike
+   * {@link resize} this always runs, because the restored buffer has no memory of
+   * our previous renderer state.
+   */
+  private reapplyRendererState(): void {
+    if (this.disposed || !this.renderer) return
+    const width = this.canvas.clientWidth || 1
+    const height = this.canvas.clientHeight || 1
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.maxPixelRatio))
+    this.renderer.setSize(width, height, false)
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace
+    this.camera.aspect = width / height
+    this.camera.updateProjectionMatrix()
   }
 
   dispose(): void {
@@ -1089,7 +1198,11 @@ export class SceneRoom {
     this.audioContext = null
     this.sceneFx.dispose()
     this.labelLayer.remove()
-    this.renderer.dispose()
+    this.unsubRendererStatus?.()
+    this.unsubRendererStatus = null
+    this.renderer?.dispose()
+    this.contextRecovery?.dispose()
+    this.contextRecovery = null
   }
 
   private toAvatarHandle(state: SceneRoomAvatarState): SceneRoomAvatarHandle {
@@ -1400,10 +1513,13 @@ export class SceneRoom {
     } catch (err) {
       this.logger.error?.('[character-kit] SceneRoom tick', err)
     }
+    // A lost/unavailable context throws on every draw call; skip rendering until
+    // it is restored (the simulation above keeps running so nothing desyncs).
+    if (!contextAllowsRender(this.contextState())) return
     try {
       if (this.phoneVr.renderFrame()) {
         /* stereo path rendered */
-      } else {
+      } else if (this.renderer) {
         this.renderer.render(this.scene, this.camera)
         this.labelRenderer.render(this.scene, this.camera)
       }

@@ -5,6 +5,7 @@ import {
   type AvatarAssetLoadProgress,
   type CompanionClothesInput,
   type CompanionHostOptions,
+  type RendererStatusListener,
 } from '@nexus/character-kit'
 import { AvatarLoadProgressBars } from './AvatarLoadProgressBars.js'
 import { ensureAvatarAssetCacheBridge } from './ensureAvatarAssetCacheBridge.js'
@@ -30,6 +31,11 @@ export type CompanionCanvasProps = {
   /** Catalog gate for `vrmUrl` (owner preview may set previewUnverified via hostOptions path). */
   validationStatus?: string | null
   previewUnverified?: boolean
+  /**
+   * Optional WebGL renderer status feed (`ok` | `lost` | `restored` | `failed`).
+   * Purely additive: when omitted, behaviour is unchanged.
+   */
+  onRendererStatus?: RendererStatusListener
 }
 
 export function CompanionCanvas({
@@ -46,11 +52,14 @@ export function CompanionCanvas({
   onHostReady,
   validationStatus,
   previewUnverified,
+  onRendererStatus,
 }: CompanionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const hostRef = useRef<CompanionHost | null>(null)
   const onHostReadyRef = useRef(onHostReady)
   onHostReadyRef.current = onHostReady
+  const onRendererStatusRef = useRef(onRendererStatus)
+  onRendererStatusRef.current = onRendererStatus
   const [hostTick, setHostTick] = useState(0)
   const [loadProgress, setLoadProgress] = useState<AvatarAssetLoadProgress>(
     emptyAvatarAssetLoadProgress(),
@@ -69,9 +78,13 @@ export function CompanionCanvas({
     hostRef.current = host
     setHostTick((n) => n + 1)
     const offProgress = host.onLoadProgress(setLoadProgress)
+    const offRendererStatus = host.onRendererStatus((status) =>
+      onRendererStatusRef.current?.(status),
+    )
     onHostReadyRef.current?.(host)
     return () => {
       offProgress()
+      offRendererStatus()
       host.dispose()
       hostRef.current = null
       onHostReadyRef.current?.(null)
