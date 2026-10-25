@@ -268,9 +268,40 @@ export const GAZE_SPINE_PITCH_MAX = MathUtils.degToRad(22)
 /** Default head pointer cone (matches spine). */
 export const GAZE_POINTER_YAW_MAX = MathUtils.degToRad(20)
 export const GAZE_POINTER_PITCH_MAX = MathUtils.degToRad(22)
-/** Default eye aim cone — wider than head so irises can look past the nose. */
-export const GAZE_EYE_YAW_MAX = MathUtils.degToRad(70)
-export const GAZE_EYE_PITCH_MAX = MathUtils.degToRad(30)
+/**
+ * Default eye aim cone. Anatomically the eyeball can only rotate ~25–30° yaw /
+ * ~15–20° pitch before the iris slides off the visible eye opening, so this is a
+ * deliberately *narrow* cone (the old 70°/30° "look past the nose" value is what
+ * pushed the iris off the eye). The eyes still lead the head *bone*, which only
+ * takes half the head chain (see {@link EYE_YAW_ANATOMIC_MAX_DEG}).
+ */
+export const GAZE_EYE_YAW_MAX = MathUtils.degToRad(28)
+export const GAZE_EYE_PITCH_MAX = MathUtils.degToRad(20)
+
+/**
+ * The **applied** (anatomical) iris-rotation cap — the gaze target may point
+ * anywhere, but the eyeball itself must not rotate past this or the iris leaves
+ * the eye opening. A far target therefore cannot over-rotate the eye; only the
+ * applied magnitude is capped (the target keeps pointing correctly).
+ *
+ * This is deliberately *below* {@link GAZE_EYE_YAW_MAX}: the registered cone is
+ * the **gaze target** cone (where the iris *would* look if it could), and this
+ * is the hard limit actually driven into the eye bone/applier. Both live in one
+ * place so a caller cannot re-widen the applied travel without changing it here.
+ */
+export const EYE_YAW_ANATOMIC_MAX_DEG = 26
+export const EYE_PITCH_ANATOMIC_MAX_DEG = 18
+
+/** Clamp an eye gaze cone (degrees) to the anatomical applied limit (axis-wise). */
+export function clampEyeConeDeg(
+  eyeYawMaxDeg: number,
+  eyePitchMaxDeg: number,
+): { yawDeg: number; pitchDeg: number } {
+  return {
+    yawDeg: Math.min(eyeYawMaxDeg, EYE_YAW_ANATOMIC_MAX_DEG),
+    pitchDeg: Math.min(eyePitchMaxDeg, EYE_PITCH_ANATOMIC_MAX_DEG),
+  }
+}
 /** Body barely turns for pointer (hips stay toward the viewer). */
 export const GAZE_BODY_POINTER_MAX = MathUtils.degToRad(12)
 export const GAZE_BODY_EXPLICIT_MAX = MathUtils.degToRad(140)
@@ -281,17 +312,19 @@ export const GAZE_HEAD_COVER = MathUtils.degToRad(50)
 export const GAZE_EYE_IDLE_MS = 5000
 
 /**
- * Per-surface eye-look cones (degrees). The eyes get their **own**, wider cone
- * than the head so the irises lead the head bone and keep looking at the target
- * after the head has hit its clamp.
+ * Per-surface eye-look cones (degrees). The eyes still lead the **head bone**
+ * (which only takes `0.5 × headYawMax ≈ 10–15°` of the chain) so the irises
+ * reach the residual the head left behind — but the cone is now clamped to the
+ * **anatomical** iris range, not the old 70°/30° "look past the nose" value that
+ * slid the iris off the eye.
  *
- * The companion scene tracks the cursor across the whole OS screen, so it needs a
- * wider head cone (default head 20°/22°) — and a proportionally wider eye cone
- * too, or the irises would pin at the same place the head does. The shared
- * (in-page) scene keeps the tighter library defaults.
+ * The companion scene tracks the cursor across the whole OS screen and uses a
+ * wider *head* cone (default 20°/22°) than the shared (in-page) scene; the eye
+ * cone stays anatomical on both — past ~28°/20° the eyeball geometry runs out,
+ * so a bigger cone only pushes the iris out of the eye opening.
  */
-export const COMPANION_EYE_YAW_MAX = MathUtils.degToRad(70)
-export const COMPANION_EYE_PITCH_MAX = MathUtils.degToRad(30)
+export const COMPANION_EYE_YAW_MAX = GAZE_EYE_YAW_MAX
+export const COMPANION_EYE_PITCH_MAX = GAZE_EYE_PITCH_MAX
 
 /** Ease rate for the direct eye-bone fallback — faster than the head (12). */
 const EYE_BONE_LOOK_LAMBDA = 20
@@ -365,17 +398,22 @@ export interface GazeLimits {
   headYawMaxDeg: number
   /** Max head/neck/chest pitch (degrees). */
   headPitchMaxDeg: number
-  /** Max eye aim yaw from camera-facing (degrees). Should be ≥ head for visible iris offset. */
+  /**
+   * Max eye **gaze target** yaw from camera-facing (degrees). Should be ≥ head
+   * for a visible iris lead, but the applied iris rotation is capped anatomically
+   * (see {@link EYE_YAW_ANATOMIC_MAX_DEG}) so a large value cannot over-rotate
+   * the eye.
+   */
   eyeYawMaxDeg: number
-  /** Max eye aim pitch (degrees). */
+  /** Max eye gaze target pitch (degrees). Applied pitch is capped anatomically. */
   eyePitchMaxDeg: number
 }
 
 export const DEFAULT_GAZE_LIMITS: GazeLimits = {
   headYawMaxDeg: 20,
   headPitchMaxDeg: 22,
-  eyeYawMaxDeg: 70,
-  eyePitchMaxDeg: 30,
+  eyeYawMaxDeg: Math.round(MathUtils.radToDeg(GAZE_EYE_YAW_MAX)),
+  eyePitchMaxDeg: Math.round(MathUtils.radToDeg(GAZE_EYE_PITCH_MAX)),
 }
 
 export function clampGazeLimits(raw: Partial<GazeLimits> | null | undefined): GazeLimits {
@@ -388,6 +426,8 @@ export function clampGazeLimits(raw: Partial<GazeLimits> | null | undefined): Ga
   return {
     headYawMaxDeg: num(raw?.headYawMaxDeg, d.headYawMaxDeg, 10, 60),
     headPitchMaxDeg: num(raw?.headPitchMaxDeg, d.headPitchMaxDeg, 8, 40),
+    // The registered eye cone may exceed the anatomical cap; it is only ever
+    // *applied* up to {@link EYE_YAW_ANATOMIC_MAX_DEG} (see `clampEyeConeDeg`).
     eyeYawMaxDeg: num(raw?.eyeYawMaxDeg, d.eyeYawMaxDeg, 0, 90),
     eyePitchMaxDeg: num(raw?.eyePitchMaxDeg, d.eyePitchMaxDeg, 10, 45),
   }
@@ -516,6 +556,13 @@ export class CharacterGaze {
   private headPitchMax = GAZE_SPINE_PITCH_MAX
   private eyeYawMax = GAZE_EYE_YAW_MAX
   private eyePitchMax = GAZE_EYE_PITCH_MAX
+  /**
+   * The **applied** iris cone — anatomically capped independently of the gaze
+   * target cone, so a far target (or a widened companion cone) cannot rotate the
+   * eyeball past where the iris leaves the eye opening.
+   */
+  private appliedEyeYawMax = MathUtils.degToRad(EYE_YAW_ANATOMIC_MAX_DEG)
+  private appliedEyePitchMax = MathUtils.degToRad(EYE_PITCH_ANATOMIC_MAX_DEG)
 
   /** World facing from locomotion (0 = face camera / +Z). */
   setLocomotionYaw(yaw: number): void {
@@ -541,8 +588,11 @@ export class CharacterGaze {
       eyePitchMaxDeg: MathUtils.radToDeg(this.eyePitchMax),
       ...raw,
     })
-    // Eyes usually sit a little past the head so the iris can glance sideways.
-    // Do not override an explicit eye yaw (0 is a valid locked-eyes setting).
+    // Eyes usually sit a little past the head *bone* so the iris can glance
+    // sideways. Do not override an explicit eye yaw (0 is a valid locked-eyes
+    // setting). The applied rotation is separately capped anatomically, so this
+    // floor widens the gaze *target* only, never the iris travel (see
+    // `clampEyeConeDeg`).
     if (raw.eyeYawMaxDeg === undefined && lim.eyeYawMaxDeg < lim.headYawMaxDeg + 8) {
       lim.eyeYawMaxDeg = Math.min(90, lim.headYawMaxDeg + 8)
     }
@@ -553,6 +603,11 @@ export class CharacterGaze {
     this.headPitchMax = MathUtils.degToRad(lim.headPitchMaxDeg)
     this.eyeYawMax = MathUtils.degToRad(lim.eyeYawMaxDeg)
     this.eyePitchMax = MathUtils.degToRad(lim.eyePitchMaxDeg)
+    // The applied iris cone stays anatomical even when the gaze target cone is
+    // widened (the head cone can legitimately exceed the eye's physical range).
+    const applied = clampEyeConeDeg(lim.eyeYawMaxDeg, lim.eyePitchMaxDeg)
+    this.appliedEyeYawMax = MathUtils.degToRad(applied.yawDeg)
+    this.appliedEyePitchMax = MathUtils.degToRad(applied.pitchDeg)
     this.retuneEyeApplier()
     return lim
   }
@@ -1075,8 +1130,11 @@ export class CharacterGaze {
   private retuneEyeApplier(): void {
     const applier = this.eyeApplier
     if (!applier) return
-    const yaw = eyeLookRangeMap(MathUtils.radToDeg(this.eyeYawMax))
-    const pitch = eyeLookRangeMap(MathUtils.radToDeg(this.eyePitchMax))
+    // Use the **applied** (anatomical) cone, not the gaze-target cone: the map
+    // clamps the residual the applier feeds the eye bone, so this is where the
+    // iris-rotation cap actually takes effect for a materials-applier rig.
+    const yaw = eyeLookRangeMap(MathUtils.radToDeg(this.appliedEyeYawMax))
+    const pitch = eyeLookRangeMap(MathUtils.radToDeg(this.appliedEyePitchMax))
     if (!yaw || !pitch) return
     if (applier.rangeMapHorizontalInner) Object.assign(applier.rangeMapHorizontalInner, yaw)
     if (applier.rangeMapHorizontalOuter) Object.assign(applier.rangeMapHorizontalOuter, yaw)
@@ -1098,8 +1156,8 @@ export class CharacterGaze {
       _headPos,
       worldTarget,
       facingYaw,
-      this.eyeYawMax,
-      this.eyePitchMax,
+      this.appliedEyeYawMax,
+      this.appliedEyePitchMax,
     )
     this.lastEyeYaw = expSmoothAngle(this.lastEyeYaw, yaw, EYE_BONE_LOOK_LAMBDA, dt)
     this.lastEyePitch = expSmooth(this.lastEyePitch, pitch, EYE_BONE_LOOK_LAMBDA, dt)
@@ -1140,6 +1198,10 @@ export class CharacterGaze {
     eyeBoneRotDeg: { x: number; y: number; z: number } | null
     /** Angle (deg) between the current eye bone and its bind rest = eye look. */
     eyeLookDeg: number | null
+    /** The anatomical cap actually applied to the iris rotation (degrees). */
+    appliedEyeMaxDeg: { yaw: number; pitch: number }
+    /** True when the applied iris rotation is at/over its anatomical cap. */
+    eyeAtAppliedCap: boolean
     /** Retuned bone-applier range maps (`outputScale`/`inputMaxValue`), if a bone applier drives the eyes. */
     eyeRangeMap: { inputMaxValue: number; outputScale: number } | null
     limits: { yawDeg: number; pitchDeg: number; eyeYawDeg: number; eyePitchDeg: number }
@@ -1171,6 +1233,12 @@ export class CharacterGaze {
           }
         : null,
       eyeLookDeg,
+      appliedEyeMaxDeg: {
+        yaw: Math.round(MathUtils.radToDeg(this.appliedEyeYawMax) * 10) / 10,
+        pitch: Math.round(MathUtils.radToDeg(this.appliedEyePitchMax) * 10) / 10,
+      },
+      eyeAtAppliedCap:
+        eyeLookDeg != null && eyeLookDeg >= MathUtils.radToDeg(this.appliedEyeYawMax) - 1,
       eyeRangeMap: this.eyeApplier?.rangeMapHorizontalInner
         ? {
             inputMaxValue: this.eyeApplier.rangeMapHorizontalInner.inputMaxValue,

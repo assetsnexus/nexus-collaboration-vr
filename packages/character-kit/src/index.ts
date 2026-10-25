@@ -261,6 +261,9 @@ export {
   GAZE_EYE_IDLE_MS,
   COMPANION_EYE_YAW_MAX,
   COMPANION_EYE_PITCH_MAX,
+  EYE_YAW_ANATOMIC_MAX_DEG,
+  EYE_PITCH_ANATOMIC_MAX_DEG,
+  clampEyeConeDeg,
   faceFrontLookSpace,
   spineLookDeltaQuat,
 } from './gaze.js'
