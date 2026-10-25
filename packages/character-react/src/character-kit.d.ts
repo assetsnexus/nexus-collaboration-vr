@@ -309,6 +309,16 @@ declare module '@nexus/character-kit' {
       resetToIdlePose: (reason?: string) => void
       /** Whether a clip can be expressed by this rig (guards retargeted VRMA). */
       isRigCompatible: (clip: unknown) => boolean
+      /**
+       * Analog locomotion input (`WASD` keys / a virtual stick): `x`/`z` are
+       * strafe/forward in `[-1, 1]`, `yaw` is a turn rate, `jump` is a
+       * rising-edge pulse. Drives the same integrate path as `character_walk`.
+       */
+      setMoveInput: (input: { x?: number; z?: number; yaw?: number; jump?: boolean } | null) => void
+      /** Analog speed (m/s) applied to `setMoveInput`; Shift selects the run gait. */
+      setAnalogSpeed: (speed: number) => void
+      /** Current ground pose (`x`/`y`/`z` + facing) for turn metadata. */
+      getPoseFeedback: (nearbyRadiusM?: number) => Record<string, unknown> | null
     }
     director: {
       getPresence: () => { setMood: (mood: string) => boolean }

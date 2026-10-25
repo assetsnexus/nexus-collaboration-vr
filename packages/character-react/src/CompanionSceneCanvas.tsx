@@ -62,6 +62,17 @@ export type CompanionSceneHost = {
   /** Solo click-ack (nod) control: enable + pick the gesture. */
   setClickAck: (opts: { enabled?: boolean; gesture?: string }) => void
   getClickAck: () => { enabled: boolean; clickGesture: string } | null
+  /**
+   * Analog locomotion input for this occupant (`WASD` keys / a virtual stick).
+   * `x`/`z` are strafe/forward in `[-1, 1]`, `yaw` is a turn rate in `[-1, 1]`,
+   * and `jump` is a rising-edge pulse. Drives the same integrate path the agent's
+   * `character_walk` tool uses, so keys and tools never fight.
+   */
+  setMoveInput: (input: { x?: number; z?: number; yaw?: number; jump?: boolean }) => void
+  /** Analog speed (m/s) applied to `setMoveInput`; Shift selects the run gait. */
+  setAnalogSpeed: (speed: number) => void
+  /** Current ground pose (`x`/`y`/`z` + `facingRad`/`facingDeg`) for turn metadata. */
+  getPoseFeedback: (nearbyRadiusM?: number) => Record<string, unknown> | null
   speakWithLipSync: (stream: MediaStream, ctx?: AudioContext) => Promise<void>
   stopLipSync: () => void
   ensureLipSync: (ctx?: AudioContext) => Promise<unknown>
@@ -227,6 +238,21 @@ export function createCompanionSceneHost(
     getClickAck: () => {
       const opts = room.getClickAckOptions()
       return opts ? { enabled: opts.enabled, clickGesture: opts.clickGesture } : null
+    },
+    setMoveInput: (input) => {
+      const handle = room.getAvatar(occupantId)
+      if (!handle) return
+      handle.controller.setMoveInput(input)
+    },
+    setAnalogSpeed: (speed) => {
+      const handle = room.getAvatar(occupantId)
+      if (!handle) return
+      handle.controller.setAnalogSpeed(speed)
+    },
+    getPoseFeedback: (nearbyRadiusM) => {
+      const handle = room.getAvatar(occupantId)
+      if (!handle) return null
+      return handle.controller.getPoseFeedback(nearbyRadiusM)
     },
     pausePresence: (reason = 'agent_status') => {
       room.getAvatar(occupantId)?.director.pausePresence(reason)

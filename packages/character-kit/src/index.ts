@@ -5,6 +5,7 @@ export {
   mayAutoDownloadAvatarAsset,
   isPlatformDefaultGestureAsset,
   isPlatformDefaultAvatarAsset,
+  isLocalLibraryAvatarUrl,
 } from './avatar-asset-gate.js'
 export type {
   AvatarAssetDescriptor,

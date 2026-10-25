@@ -37,6 +37,25 @@ const PLATFORM_SAMPLE_VRM =
   'https://cdn.jsdelivr.net/gh/pixiv/three-vrm@dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm'
 
 /**
+ * Custom schemes a host registers to serve a model from its **own** local
+ * library (e.g. the desktop companion's `nexus-avatar://avatar/<id>.vrm`).
+ *
+ * A picked local model is by definition user-supplied and cannot carry a
+ * catalog `validationStatus`, so the HTTP download gate would refuse it. These
+ * schemes are only reachable through the host's own privileged protocol handler
+ * (which serves a single file out of the app's library directory), so they are
+ * trusted the same way a `blob:` owner preview is — never a remote fetch.
+ */
+const LOCAL_LIBRARY_SCHEMES = ['nexus-avatar:'] as const
+
+/** True for a model URL served by a host's own local avatar library scheme. */
+export function isLocalLibraryAvatarUrl(url: string): boolean {
+  const trimmed = typeof url === 'string' ? url.trim().toLowerCase() : ''
+  if (!trimmed) return false
+  return LOCAL_LIBRARY_SCHEMES.some((scheme) => trimmed.startsWith(scheme))
+}
+
+/**
  * Platform default gesture pack paths — same shape as playground
  * `/assets/vrma/manifest.json` entries (and the `/dev-vrm-assets` mount).
  */
@@ -70,6 +89,12 @@ export function mayAutoDownloadAvatarAsset(asset: AvatarAssetDescriptor): AutoDo
   }
   if (/^blob:/i.test(url)) {
     return { allow: true, reason: 'blob_preview' }
+  }
+  // A host-served local library model (e.g. the desktop companion's picked VRM).
+  // It is only reachable through the host's own protocol handler, so it needs no
+  // catalog status — the same trust the owner preview gets.
+  if (isLocalLibraryAvatarUrl(url)) {
+    return { allow: true, reason: 'local_library' }
   }
   if (asset.validationStatus === 'verified') {
     return { allow: true, reason: 'verified' }
