@@ -4,8 +4,11 @@ import * as THREE from 'three'
 import {
   ARM_HANG_L,
   ARM_HANG_R,
+  applyRelaxedRestPose,
+  armFrameZSign,
   assignClipUserData,
   buildProceduralGestureClips,
+  isVrm0,
   scratchNoseGestureBones,
 } from './procedural-gestures.ts'
 import { PRESENCE_MOODS } from './presence-moods.ts'
@@ -39,7 +42,7 @@ const ALL_BONES = [
  * procedural builder calls. `bones` selects which normalized bones exist, which
  * lets a fixture model a stripped / partial rig.
  */
-function mockVrm(bones: string[] = ALL_BONES) {
+function mockVrm(bones: string[] = ALL_BONES, metaVersion?: string) {
   const root = new THREE.Object3D()
   root.name = 'root'
   const nodes = new Map<string, THREE.Object3D>()
@@ -54,6 +57,7 @@ function mockVrm(bones: string[] = ALL_BONES) {
   root.updateMatrixWorld(true)
   return {
     scene: root,
+    meta: metaVersion === undefined ? undefined : { metaVersion },
     humanoid: {
       getNormalizedBoneNode(name: string) {
         return nodes.get(name) ?? null
@@ -151,6 +155,61 @@ describe('arm hang sign convention (stuck-arms regression)', () => {
     // puts them opposite in sign.
     assert.ok(first.z * first.w < 0, 'idle left upper arm must hang (negative Z)')
     assert.ok(identity.angleTo(first) > 0.1, 'idle actually rotates the arm')
+  })
+})
+
+describe('VRM 0.x arm-frame mirroring (arms-point-up regression)', () => {
+  // VRM 0.x authors the humanoid facing −Y; `VRMUtils.rotateVRM0` counter-rotates
+  // the scene, which MIRRORS the arm-chain bones' local frame. The A-pose hang
+  // offsets are authored for the VRM 1.0 frame, so a VRM 0.x model needs their Z
+  // sign flipped or the arms swing UP (the reported `jibril.vrm` bug). Proved
+  // live over CDP: a VRM1 model's arm landed 26° from down while every VRM0 model
+  // landed ~154° (up) with the un-flipped sign.
+  it('detects VRM 0.x from meta.metaVersion (never per-model)', () => {
+    assert.equal(isVrm0(mockVrm(ALL_BONES, '0') as never), true)
+    assert.equal(isVrm0(mockVrm(ALL_BONES, '1') as never), false)
+    assert.equal(isVrm0(mockVrm(ALL_BONES, undefined) as never), false)
+  })
+
+  it('Z-flips only the arm-chain bones, and only for VRM 0.x', () => {
+    const vrm0 = mockVrm(ALL_BONES, '0') as never
+    const vrm1 = mockVrm(ALL_BONES, '1') as never
+    for (const bone of ['leftUpperArm', 'rightUpperArm', 'leftShoulder', 'rightLowerArm']) {
+      assert.equal(armFrameZSign(vrm0, bone), -1, `${bone} flips on VRM0`)
+      assert.equal(armFrameZSign(vrm1, bone), 1, `${bone} stays on VRM1`)
+    }
+    // Torso/head are never flipped — that would break a correct upper body.
+    for (const bone of ['hips', 'spine', 'chest', 'neck', 'head']) {
+      assert.equal(armFrameZSign(vrm0, bone), 1, `${bone} must not flip`)
+    }
+  })
+
+  it('builds a VRM0 idle whose left upper arm hangs with the flipped Z sign', () => {
+    const readLeftUpperArm = (vrm: unknown) => {
+      const idle = buildProceduralGestureClips(vrm as never).find((c) => c.id === 'idle')!
+      const track = idle.clip.tracks.find(
+        (t) => t.name.replace(/\.[^.]+$/, '').toLowerCase() === 'leftupperarm',
+      ) as THREE.QuaternionKeyframeTrack
+      return new THREE.Quaternion(
+        track.values[0]!,
+        track.values[1]!,
+        track.values[2]!,
+        track.values[3]!,
+      )
+    }
+    const vrm0 = readLeftUpperArm(mockVrm(ALL_BONES, '0'))
+    const vrm1 = readLeftUpperArm(mockVrm(ALL_BONES, '1'))
+    // The two conventions must land on OPPOSITE Z signs so both lower the arm.
+    assert.ok(vrm0.z * vrm1.z < 0, 'VRM0 idle must use the opposite Z sign to VRM1')
+    assert.ok(vrm1.z * vrm1.w < 0, 'VRM1 left arm still hangs with negative Z')
+  })
+
+  it('applies the relaxed rest pose with the flipped sign on VRM 0.x', () => {
+    const vrm0 = mockVrm(ALL_BONES, '0') as never as { humanoid: { getNormalizedBoneNode(n: string): THREE.Object3D } }
+    applyRelaxedRestPose(vrm0 as never)
+    const left = vrm0.humanoid.getNormalizedBoneNode('leftUpperArm').quaternion
+    // Negative Z hang on VRM1 → positive Z after the VRM0 flip.
+    assert.ok(left.z > 0, 'VRM0 relaxed pose flips the left-arm hang Z')
   })
 })
 

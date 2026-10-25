@@ -27,6 +27,40 @@ export const ARM_HANG_L = -1
 /** @internal exported for tests */
 export const ARM_HANG_R = 1
 
+/**
+ * Is this a VRM 0.x model? VRM 0.x authors the humanoid facing −Y (Unity); the
+ * loader counter-rotates the scene (`VRMUtils.rotateVRM0`), which **mirrors the
+ * arm bones' local frame**. A given local-axis offset therefore lowers the arm
+ * on a VRM 1.0 rig but RAISES it on a VRM 0.x rig. The rest/idle offsets below
+ * are authored for the VRM 1.0 frame, so VRM 0.x needs their arm-axis sign
+ * flipped to converge on the same visible A-pose. Detected per-model from the
+ * spec version (never hardcoded per file), matching three-vrm's own check.
+ */
+export function isVrm0(vrm: VRM): boolean {
+  return (vrm.meta as { metaVersion?: string } | undefined)?.metaVersion === '0'
+}
+
+/**
+ * Upper-arm-chain bones whose three-vrm normalized local frame is mirrored
+ * between VRM 0.x and 1.x. Offsets on these bones are authored for the VRM 1.0
+ * frame and Z-flipped for VRM 0.x.
+ */
+const ARM_FRAME_BONES: ReadonlySet<string> = new Set<string>([
+  VRMHumanBoneName.LeftShoulder,
+  VRMHumanBoneName.RightShoulder,
+  VRMHumanBoneName.LeftUpperArm,
+  VRMHumanBoneName.RightUpperArm,
+  VRMHumanBoneName.LeftLowerArm,
+  VRMHumanBoneName.RightLowerArm,
+  VRMHumanBoneName.LeftHand,
+  VRMHumanBoneName.RightHand,
+])
+
+/** −1 when a VRM 0.x arm-bone offset must be Z-flipped, +1 otherwise. */
+export function armFrameZSign(vrm: VRM, bone: string): number {
+  return isVrm0(vrm) && ARM_FRAME_BONES.has(bone) ? -1 : 1
+}
+
 /** Left upper-arm hang magnitude (deg) → signed Z offset. */
 function hangL(deg: number): number {
   return ARM_HANG_L * deg * DEG
@@ -136,12 +170,13 @@ function quatTrackRelative(
 ): THREE.QuaternionKeyframeTrack | null {
   const node = vrm.humanoid?.getNormalizedBoneNode(bone)
   if (!node?.name) return null
+  const zSign = armFrameZSign(vrm, bone)
   const values: number[] = []
   const e = new THREE.Euler(0, 0, 0, 'XYZ')
   const offset = new THREE.Quaternion()
   const out = new THREE.Quaternion()
   for (const eu of eulers) {
-    e.set(eu.x ?? 0, eu.y ?? 0, eu.z ?? 0)
+    e.set(eu.x ?? 0, eu.y ?? 0, (eu.z ?? 0) * zSign)
     offset.setFromEuler(e)
     out.copy(rest).multiply(offset)
     values.push(out.x, out.y, out.z, out.w)
@@ -202,7 +237,7 @@ function applyOffsetsFromRest(
     const node = vrm.humanoid?.getNormalizedBoneNode(be.bone)
     const rest = restMap.get(be.bone)
     if (!node || !rest) continue
-    e.set(be.x ?? 0, be.y ?? 0, be.z ?? 0)
+    e.set(be.x ?? 0, be.y ?? 0, (be.z ?? 0) * armFrameZSign(vrm, be.bone))
     q.setFromEuler(e)
     node.quaternion.copy(rest).multiply(q)
   }
@@ -351,7 +386,7 @@ export function applyRelaxedRestPose(vrm: VRM): void {
     const node = vrm.humanoid?.getNormalizedBoneNode(be.bone)
     if (!node) continue
     const rest = node.quaternion.clone()
-    e.set(be.x ?? 0, be.y ?? 0, be.z ?? 0)
+    e.set(be.x ?? 0, be.y ?? 0, (be.z ?? 0) * armFrameZSign(vrm, be.bone))
     q.setFromEuler(e)
     node.quaternion.copy(rest).multiply(q)
   }
