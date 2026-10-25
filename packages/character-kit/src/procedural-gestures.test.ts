@@ -154,6 +154,97 @@ describe('arm hang sign convention (stuck-arms regression)', () => {
   })
 })
 
+describe('orbit is a body gesture, not a wave (per-bone delta vs idle)', () => {
+  // The user saw `orbit` "lift an arm to wave and break the elbow". Root cause:
+  // `orbit` had no clip in any source, so `playGesture('orbit')` warned + skipped
+  // while the previously-playing wave stayed on screen (the "wrong gesture"
+  // report). The fallback now provides a real `orbit` clip that drives hips/spine
+  // (a torso circle) and leaves the arms at the idle hang — never a raise, never
+  // an elbow fold. This locks that with a per-bone peak-delta-vs-idle audit, the
+  // same measurement the earlier gesture audit used.
+  const clips = buildProceduralGestureClips(mockVrm() as never)
+
+  function boneTracks(id: string): Map<string, THREE.QuaternionKeyframeTrack> {
+    const out = new Map<string, THREE.QuaternionKeyframeTrack>()
+    for (const track of clips.find((c) => c.id === id)!.clip.tracks) {
+      if (!/\.quaternion$/i.test(track.name)) continue
+      out.set(track.name, track as THREE.QuaternionKeyframeTrack)
+    }
+    return out
+  }
+
+  /**
+   * For every bone, the peak rotation (deg) away from that bone's idle baseline
+   * (its first idle keyframe). A bone the clip holds at the idle rest is 0 — that
+   * is how we prove `orbit` does not move the arms the way a wave does.
+   */
+  function peakDeltaVsIdle(id: string): Map<string, number> {
+    const idle = boneTracks('idle')
+    const out = new Map<string, number>()
+    for (const [name, track] of boneTracks(id)) {
+      // Baseline is the bone's idle first key, or the bind rest when idle does
+      // not key it at all (idle omits hips/legs, so orbit's torso lean is new).
+      const base = idle.get(name)
+      const bq = base
+        ? new THREE.Quaternion(base.values[0]!, base.values[1]!, base.values[2]!, base.values[3]!)
+        : new THREE.Quaternion()
+      let peak = 0
+      for (let i = 0; i < track.values.length; i += 4) {
+        const q = new THREE.Quaternion(
+          track.values[i]!,
+          track.values[i + 1]!,
+          track.values[i + 2]!,
+          track.values[i + 3]!,
+        )
+        peak = Math.max(peak, bq.angleTo(q))
+      }
+      out.set(name.replace(/\.[^.]+$/, ''), (peak * 180) / Math.PI)
+    }
+    return out
+  }
+
+  it('drives the stance (hips/spine) — it is a body clip', () => {
+    const orbit = peakDeltaVsIdle('orbit')
+    assert.ok((orbit.get('hips') ?? 0) > 5, `hips delta ${orbit.get('hips')}`)
+    assert.ok((orbit.get('spine') ?? 0) > 2, `spine delta ${orbit.get('spine')}`)
+    assert.equal(clips.find((c) => c.id === 'orbit')!.overlay, false, 'orbit must be a body clip')
+  })
+
+  it('never raises an arm or folds an elbow the way a wave does', () => {
+    const orbit = peakDeltaVsIdle('orbit')
+    const wave = peakDeltaVsIdle('wave')
+    // A wave raises the right upper arm hard and folds the right elbow.
+    assert.ok((wave.get('rightUpperArm') ?? 0) > 80, `wave raise ${wave.get('rightUpperArm')}`)
+    assert.ok((wave.get('rightLowerArm') ?? 0) > 40, `wave elbow ${wave.get('rightLowerArm')}`)
+    // `orbit` keeps the arms at the idle hang (a ≤ a few degrees of sway) and
+    // never keys the elbow at all.
+    assert.ok(
+      (orbit.get('rightUpperArm') ?? 0) < 15,
+      `orbit right arm moved ${orbit.get('rightUpperArm')}° vs idle — looks like a raise`,
+    )
+    assert.ok(
+      (orbit.get('leftUpperArm') ?? 0) < 15,
+      `orbit left arm moved ${orbit.get('leftUpperArm')}° vs idle`,
+    )
+    assert.equal(orbit.get('rightLowerArm') ?? 0, 0, 'orbit must not fold the elbow')
+    assert.equal(orbit.get('leftLowerArm') ?? 0, 0, 'orbit must not fold the left elbow')
+  })
+
+  it('keeps every bone within a sane rotation (< 100°)', () => {
+    for (const [bone, deg] of peakDeltaVsIdle('orbit')) {
+      assert.ok(deg < 100, `${bone} rotated ${deg.toFixed(1)}° vs idle — contorted pose`)
+    }
+  })
+
+  it('does not lift or key a hand at all', () => {
+    // Structural proxy for the "broken elbow" report: `orbit` leaves the hands on
+    // the idle rest, so no hand raise can occur.
+    const orbit = peakDeltaVsIdle('orbit')
+    assert.ok((orbit.get('leftHand') ?? 0) < 0.5, `orbit moved the left hand`)
+    assert.ok((orbit.get('rightHand') ?? 0) < 0.5, `orbit moved the right hand`)
+  })
+})
+
 describe('mood-pool procedural coverage', () => {
   // If a PRESENCE_MOODS pool names a gesture the fallback set cannot provide,
   // IdlePresenceDirector logs "missing gesture" and the tier silently skips — the

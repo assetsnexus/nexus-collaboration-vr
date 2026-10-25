@@ -73,6 +73,12 @@ export type CompanionSceneHost = {
   setAnalogSpeed: (speed: number) => void
   /** Current ground pose (`x`/`y`/`z` + `facingRad`/`facingDeg`) for turn metadata. */
   getPoseFeedback: (nearbyRadiusM?: number) => Record<string, unknown> | null
+  /** Id of the gesture clip currently driving the body (null when idle) — debug. */
+  getGestureId?: () => string | null
+  /** Read-only gaze snapshot (head vs eye aim, limits) for live debugging. */
+  getGazeDebugState?: () => Record<string, unknown> | null
+  /** Per-bone angle (deg) off rest, keyed by VRM bone name, for gesture audits. */
+  getBonePoseDeg?: () => Record<string, number> | null
   speakWithLipSync: (stream: MediaStream, ctx?: AudioContext) => Promise<void>
   stopLipSync: () => void
   ensureLipSync: (ctx?: AudioContext) => Promise<unknown>
@@ -253,6 +259,19 @@ export function createCompanionSceneHost(
       const handle = room.getAvatar(occupantId)
       if (!handle) return null
       return handle.controller.getPoseFeedback(nearbyRadiusM)
+    },
+    getGestureId: () => {
+      const controller = room.getAvatar(occupantId)?.controller
+      return controller?.getGestureId ? controller.getGestureId() : null
+    },
+    getGazeDebugState: () => {
+      const handle = room.getAvatar(occupantId)
+      if (!handle) return null
+      return handle.controller.getGazeDebugState()
+    },
+    getBonePoseDeg: () => {
+      const controller = room.getAvatar(occupantId)?.controller
+      return controller?.getBonePoseDeg ? controller.getBonePoseDeg() : null
     },
     pausePresence: (reason = 'agent_status') => {
       room.getAvatar(occupantId)?.director.pausePresence(reason)

@@ -23,6 +23,14 @@ export const GESTURE_VARIANT_GROUPS: Record<string, string[]> = {
   walk_careful: ['walk_careful', 'walk'],
   walk_crawl: ['walk_crawl'],
   walk_roll: ['walk_roll'],
+  /**
+   * The torso-circle gesture. There is no `orbit` clip in the shipped pack, so
+   * this group is deliberately single-member: `resolveGestureVariant('orbit')`
+   * returns `orbit`, which the procedural fallback builder now provides. Keeping
+   * it here documents that `orbit` must never resolve into `wave`/`sit_wave`
+   * (that mapping was the "orbit plays a wave + broken elbow" bug).
+   */
+  orbit: ['orbit'],
 }
 
 /** Pick a random loaded variant for a logical id (or the id itself). */

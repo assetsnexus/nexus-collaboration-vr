@@ -193,6 +193,30 @@ export function yawTowardXZ(from: Xyz, to: Xyz, restYaw = 0): number {
   return Math.atan2(dx, dz) - restYaw
 }
 
+/**
+ * Residual yaw/pitch (radians) from the head to a world target, clamped to a
+ * per-surface cone. Used by both the head chain and the eye-bone fallback so the
+ * eyes and head aim at the **same** world point and each converge on their own
+ * clamp. Eyes pass their own (wider) limits, which is what makes the irises lead
+ * the head and keep looking past the neck once the head has hit its clamp.
+ */
+export function residualLookOffsets(
+  head: Xyz,
+  target: Xyz,
+  facingYaw: number,
+  yawMax: number,
+  pitchMax: number,
+): { yaw: number; pitch: number } {
+  const remain = wrapPi(yawTowardXZ(head, target) - facingYaw)
+  const dy = target.y - head.y
+  const dist = Math.hypot(target.x - head.x, target.z - head.z) || 1
+  const pitch = -Math.atan2(dy, dist)
+  return {
+    yaw: clamp(remain, -yawMax, yawMax),
+    pitch: clamp(pitch, -pitchMax, pitchMax),
+  }
+}
+
 /** Wrap to (−π, π]. */
 export function wrapPi(rad: number): number {
   const two = Math.PI * 2
@@ -255,6 +279,86 @@ export const GAZE_HEAD_COVER = MathUtils.degToRad(50)
 
 /** After this long with no pointer motion, eyes ease back to the user. */
 export const GAZE_EYE_IDLE_MS = 5000
+
+/**
+ * Per-surface eye-look cones (degrees). The eyes get their **own**, wider cone
+ * than the head so the irises lead the head bone and keep looking at the target
+ * after the head has hit its clamp.
+ *
+ * The companion scene tracks the cursor across the whole OS screen, so it needs a
+ * wider head cone (default head 20°/22°) — and a proportionally wider eye cone
+ * too, or the irises would pin at the same place the head does. The shared
+ * (in-page) scene keeps the tighter library defaults.
+ */
+export const COMPANION_EYE_YAW_MAX = MathUtils.degToRad(70)
+export const COMPANION_EYE_PITCH_MAX = MathUtils.degToRad(30)
+
+/** Ease rate for the direct eye-bone fallback — faster than the head (12). */
+const EYE_BONE_LOOK_LAMBDA = 20
+
+/**
+ * A three-vrm `VRMLookAtRangeMap`: it maps an **input gaze angle** (degrees,
+ * measured from the head's *current* orientation in the rest-head frame) to an
+ * **eye-bone rotation** (degrees) via `outputScale * clamp(src / inputMaxValue)`.
+ * Both fields are public and mutable on the live applier.
+ */
+export interface LookAtRangeMapLike {
+  inputMaxValue: number
+  outputScale: number
+}
+
+/** The bone applier's range maps + a marker property (`humanoid`). */
+interface LookAtBoneApplierLike {
+  humanoid?: unknown
+  applyYawPitch?: (yaw: number, pitch: number) => void
+  rangeMapHorizontalInner?: LookAtRangeMapLike
+  rangeMapHorizontalOuter?: LookAtRangeMapLike
+  rangeMapVerticalDown?: LookAtRangeMapLike
+  rangeMapVerticalUp?: LookAtRangeMapLike
+}
+
+/**
+ * Range-map pair that turns a three-vrm **bone** eye applier into full
+ * convergence clamped to our own eye cone.
+ *
+ * `VRMLookAtBoneApplier` defaults to `outputScale 10` / `inputMaxValue 90`, so it
+ * rotates the eyes only ~1/9 of the gaze angle: the head visibly turns while the
+ * irises barely move ("the avatar does not track with its eyes"). We want the eyes
+ * to reach the **residual** the head left behind, clamped to a wider cone than the
+ * head so they converge on the same target after the head hits its own clamp. That
+ * is exactly `outputScale === inputMaxValue === eyeMaxDeg` (an identity map with a
+ * clamp at the eye cone).
+ *
+ * The applier already removes the head's current rotation
+ * (`restHeadWorld * headWorld⁻¹`), so its input is the residual a converged iris
+ * needs — we only have to stop squashing it. Returns `{}` for a non-positive cone.
+ */
+export function eyeLookRangeMap(
+  eyeMaxDeg: number,
+): LookAtRangeMapLike | null {
+  const deg = Number(eyeMaxDeg)
+  if (!Number.isFinite(deg) || deg <= 0) return null
+  return { inputMaxValue: deg, outputScale: deg }
+}
+
+/**
+ * The VRM's eye applier when it is a three-vrm **bone** applier, else null.
+ *
+ * `VRMLookAtExpressionApplier` drives blend shapes instead of eye bones, so the
+ * range-map retune must never touch it — the marker `humanoid` property is only
+ * present on the bone applier. Detection is duck-typed so a three-vrm upgrade
+ * that renames the class still works.
+ */
+export function resolveLookAtBoneApplier(vrm: VRM | null | undefined): LookAtBoneApplierLike | null {
+  const applier = (vrm?.lookAt as { applier?: unknown } | undefined)?.applier as
+    | LookAtBoneApplierLike
+    | undefined
+  if (!applier) return null
+  if (!applier.humanoid || typeof applier.applyYawPitch !== 'function') return null
+  if (!applier.rangeMapHorizontalInner || !applier.rangeMapHorizontalOuter) return null
+  return applier
+}
+
 
 export interface GazeLimits {
   /** Max head/neck/chest yaw toward the pointer (degrees). */
@@ -370,6 +474,32 @@ export class CharacterGaze {
   private readonly prevHeadLook = new Quaternion()
   private spineApplied = false
   /**
+   * Eye-bone fallback state. `eyeBonesApplied` mirrors `spineApplied` for the
+   * eyeball rotations so {@link preMixer} can undo them before the mixer writes
+   * the next clip pose (many idle clips omit eye tracks, so without the undo the
+   * pupils would accumulate and drift).
+   */
+  private eyeBonesApplied = false
+  private readonly prevEyeLook = new Quaternion()
+  private readonly eyeLookDelta = new Quaternion()
+  /** Last applied eye yaw/pitch (radians) — diagnostics only. */
+  private lastEyeYaw = 0
+  private lastEyePitch = 0
+  /** Rig capability snapshot (diagnostics): has a VRM lookAt applyer / eye bones. */
+  private hasLookAtApplyer = false
+  private hasEyeBones = false
+  /** Retained for diagnostics only (reading live eye-bone orientation). */
+  private debugVrm: VRM | null = null
+  /**
+   * The VRM's eye applier, when it is a **bone** applier (the common case). Its
+   * default range maps squash eye rotation to ~1/9 of the gaze, so we retune them
+   * once on bind and on every limit change (see {@link eyeLookRangeMap}).
+   */
+  private eyeApplier: LookAtBoneApplierLike | null = null
+  /** Right-eye bind orientation, captured once, to measure the eye's look delta. */
+  private readonly restEyeQuat = new Quaternion()
+  private restEyeReady = false
+  /**
    * Maps +Z → model faceFront (identity for VRM1). Conjugate spine look deltas
    * so VRM0 (−Z face) pitch matches three-vrm eye look.
    */
@@ -423,6 +553,7 @@ export class CharacterGaze {
     this.headPitchMax = MathUtils.degToRad(lim.headPitchMaxDeg)
     this.eyeYawMax = MathUtils.degToRad(lim.eyeYawMaxDeg)
     this.eyePitchMax = MathUtils.degToRad(lim.eyePitchMaxDeg)
+    this.retuneEyeApplier()
     return lim
   }
 
@@ -605,6 +736,21 @@ export class CharacterGaze {
     this.restReady = false
     this.restForwardYaw = 0
     this.faceFrontSpace.identity()
+    this.hasLookAtApplyer = Boolean(vrm?.lookAt)
+    this.hasEyeBones = Boolean(
+      vrm?.humanoid?.getNormalizedBoneNode('leftEye') ||
+        vrm?.humanoid?.getNormalizedBoneNode('rightEye'),
+    )
+    this.debugVrm = vrm
+    // Capture the eye bind orientation once (measurement baseline).
+    this.restEyeReady = false
+    const eye = vrm?.humanoid?.getRawBoneNode?.('leftEye')
+    if (eye) {
+      this.restEyeQuat.copy(eye.quaternion)
+      this.restEyeReady = true
+    }
+    this.eyeApplier = resolveLookAtBoneApplier(vrm)
+    this.retuneEyeApplier()
     if (!vrm) return
     const parent = vrm.scene.parent
     const savedParentQuat = parent?.quaternion.clone()
@@ -668,16 +814,24 @@ export class CharacterGaze {
    * clips omit head/neck tracks — without undo those bones would accumulate.
    */
   preMixer(vrm: VRM | null): void {
-    if (!this.spineApplied || !vrm?.humanoid) return
-    const head = vrm.humanoid.getNormalizedBoneNode('head')
-    const neck = vrm.humanoid.getNormalizedBoneNode('neck')
-    const chest =
-      vrm.humanoid.getNormalizedBoneNode('upperChest') ??
-      vrm.humanoid.getNormalizedBoneNode('chest')
-    this.undoBoneLook(chest, this.prevChestLook)
-    this.undoBoneLook(neck, this.prevNeckLook)
-    this.undoBoneLook(head, this.prevHeadLook)
-    this.spineApplied = false
+    if (!vrm?.humanoid) return
+    if (this.spineApplied) {
+      const head = vrm.humanoid.getNormalizedBoneNode('head')
+      const neck = vrm.humanoid.getNormalizedBoneNode('neck')
+      const chest =
+        vrm.humanoid.getNormalizedBoneNode('upperChest') ??
+        vrm.humanoid.getNormalizedBoneNode('chest')
+      this.undoBoneLook(chest, this.prevChestLook)
+      this.undoBoneLook(neck, this.prevNeckLook)
+      this.undoBoneLook(head, this.prevHeadLook)
+      this.spineApplied = false
+    }
+    // Undo last frame's eye-ball rotations too (same accumulate-and-spin hazard).
+    if (this.eyeBonesApplied) {
+      this.undoBoneLook(vrm.humanoid.getNormalizedBoneNode('leftEye'), this.prevEyeLook)
+      this.undoBoneLook(vrm.humanoid.getNormalizedBoneNode('rightEye'), this.prevEyeLook)
+      this.eyeBonesApplied = false
+    }
   }
 
   update(ctx: GazeUpdateContext): void {
@@ -858,17 +1012,15 @@ export class CharacterGaze {
     head.getWorldPosition(_headPos)
     // World facing of the hips after body yaw, then residual to the look point.
     const hipsFacing = wrapPi(this.bodyYaw + this.restForwardYaw)
-    const remain = wrapPi(yawTowardXZ(_headPos, worldTarget) - hipsFacing)
-    const dy = worldTarget.y - _headPos.y
-    const dist = Math.hypot(worldTarget.x - _headPos.x, worldTarget.z - _headPos.z) || 1
-    const pitch = clamp(-Math.atan2(dy, dist), -this.headPitchMax, this.headPitchMax)
-    this.spineYaw = expSmoothAngle(
-      this.spineYaw,
-      clamp(remain, -this.headYawMax, this.headYawMax),
-      12,
-      dt,
+    const { yaw: remain, pitch: wantPitch } = residualLookOffsets(
+      _headPos,
+      worldTarget,
+      hipsFacing,
+      this.headYawMax,
+      this.headPitchMax,
     )
-    this.spinePitch = expSmooth(this.spinePitch, pitch, 12, dt)
+    this.spineYaw = expSmoothAngle(this.spineYaw, remain, 12, dt)
+    this.spinePitch = expSmooth(this.spinePitch, wantPitch, 12, dt)
 
     const yChest = this.headYawMax * 0.15
     const yNeck = this.headYawMax * 0.35
@@ -896,6 +1048,142 @@ export class CharacterGaze {
       this.prevHeadLook,
     )
     this.spineApplied = true
+    this.applyEyeBones(vrm, worldTarget, hipsFacing, dt)
+  }
+
+  /**
+   * Fallback eye look for rigs the VRM `lookAt` applyer does **not** drive.
+   *
+   * `upperEye`/`lowerEye` materials can be missing, but the humanoid rig almost
+   * always has `leftEye`/`rightEye` nodes — rotating those is what makes the
+   * pupils animate even without a materials applyer. Same residual-to-target math
+   * as the head, but with the **wider** eye cone, so the eyes lead the head and
+   * keep converging on the target after the head hits its own clamp.
+   *
+   * Costs nothing when `vrm.lookAt` exists (the materials applyer already owns
+   * the eyes) or the rig has no eye bones: rare enough that the per-frame
+   * `getObjectByName` lookup is not worth caching.
+   */
+  /**
+   * Retune the VRM's bone eye applier range maps so it converges instead of
+   * squashing the irises (see {@link eyeLookRangeMap}). Idempotent and cheap; a
+   * rig without a bone applier (no lookAt, or an expression applier) is a no-op.
+   *
+   * Called on bind and whenever the eye cone changes, so a `setGazeLimits` on the
+   * live companion immediately widens the visible eye travel.
+   */
+  private retuneEyeApplier(): void {
+    const applier = this.eyeApplier
+    if (!applier) return
+    const yaw = eyeLookRangeMap(MathUtils.radToDeg(this.eyeYawMax))
+    const pitch = eyeLookRangeMap(MathUtils.radToDeg(this.eyePitchMax))
+    if (!yaw || !pitch) return
+    if (applier.rangeMapHorizontalInner) Object.assign(applier.rangeMapHorizontalInner, yaw)
+    if (applier.rangeMapHorizontalOuter) Object.assign(applier.rangeMapHorizontalOuter, yaw)
+    if (applier.rangeMapVerticalDown) Object.assign(applier.rangeMapVerticalDown, pitch)
+    if (applier.rangeMapVerticalUp) Object.assign(applier.rangeMapVerticalUp, pitch)
+  }
+
+  private applyEyeBones(
+    vrm: VRM | null,
+    worldTarget: Vector3,
+    facingYaw: number,
+    dt: number,
+  ): void {
+    if (!vrm?.humanoid || vrm.lookAt) return
+    const left = vrm.humanoid.getNormalizedBoneNode('leftEye')
+    const right = vrm.humanoid.getNormalizedBoneNode('rightEye')
+    if (!left && !right) return
+    const { yaw, pitch } = residualLookOffsets(
+      _headPos,
+      worldTarget,
+      facingYaw,
+      this.eyeYawMax,
+      this.eyePitchMax,
+    )
+    this.lastEyeYaw = expSmoothAngle(this.lastEyeYaw, yaw, EYE_BONE_LOOK_LAMBDA, dt)
+    this.lastEyePitch = expSmooth(this.lastEyePitch, pitch, EYE_BONE_LOOK_LAMBDA, dt)
+    spineLookDeltaQuat(
+      this.lastEyeYaw,
+      this.lastEyePitch,
+      this.faceFrontSpace,
+      this.eyeLookDelta,
+    )
+    if (left) left.quaternion.multiply(this.eyeLookDelta)
+    if (right) right.quaternion.multiply(this.eyeLookDelta)
+    this.prevEyeLook.copy(this.eyeLookDelta)
+    this.eyeBonesApplied = true
+  }
+
+  /**
+   * Read-only gaze snapshot for live debugging: the pointer aim/pitch actually
+   * applied to the head chain plus the eye cone, and the effective limits. Only
+   * the fields are exposed — no Three.js objects — so an Electron CDP client can
+   * measure head-vs-eye tracking without touching internals.
+   */
+  getDebugState(): {
+    pointerOver: boolean
+    pointerWriter: 'none' | 'dom' | 'external'
+    /** True while the OS-global cursor feed is armed (DOM samples rejected). */
+    externalPointer: boolean
+    ndc: { x: number; y: number }
+    headYawDeg: number
+    headPitchDeg: number
+    eyeYawDeg: number
+    eyePitchDeg: number
+    eyeBonesApplied: boolean
+    hasLookAtApplyer: boolean
+    hasEyeBones: boolean
+    /** three-vrm lookAt applyer class when present (`VRMLookAtBoneApplyer` …). */
+    lookAtApplyer: string | null
+    /** Live left-eye rotation (degrees) — reveals whether the applyer drives eyes. */
+    eyeBoneRotDeg: { x: number; y: number; z: number } | null
+    /** Angle (deg) between the current eye bone and its bind rest = eye look. */
+    eyeLookDeg: number | null
+    /** Retuned bone-applier range maps (`outputScale`/`inputMaxValue`), if a bone applier drives the eyes. */
+    eyeRangeMap: { inputMaxValue: number; outputScale: number } | null
+    limits: { yawDeg: number; pitchDeg: number; eyeYawDeg: number; eyePitchDeg: number }
+  } {
+    const leftEye =
+      this.debugVrm?.humanoid?.getRawBoneNode?.('leftEye') ??
+      this.debugVrm?.humanoid?.getNormalizedBoneNode('leftEye')
+    const e = leftEye?.quaternion
+    const dot = e && this.restEyeReady ? Math.abs(e.dot(this.restEyeQuat)) : 1
+    const eyeLookDeg = Number(MathUtils.radToDeg(2 * Math.acos(Math.min(1, dot))).toFixed(2))
+    return {
+      pointerOver: this.pointerOver,
+      pointerWriter: this.pointerWriter,
+      externalPointer: this.externalPointer,
+      ndc: { x: Number(this.ndcX.toFixed(3)), y: Number(this.ndcY.toFixed(3)) },
+      headYawDeg: Number(MathUtils.radToDeg(this.spineYaw).toFixed(2)),
+      headPitchDeg: Number(MathUtils.radToDeg(this.spinePitch).toFixed(2)),
+      eyeYawDeg: Number(MathUtils.radToDeg(this.lastEyeYaw).toFixed(2)),
+      eyePitchDeg: Number(MathUtils.radToDeg(this.lastEyePitch).toFixed(2)),
+      eyeBonesApplied: this.eyeBonesApplied,
+      hasLookAtApplyer: this.hasLookAtApplyer,
+      hasEyeBones: this.hasEyeBones,
+      lookAtApplyer: this.debugVrm?.lookAt?.constructor?.name ?? null,
+      eyeBoneRotDeg: e
+        ? {
+            x: Number(MathUtils.radToDeg(e.x).toFixed(2)),
+            y: Number(MathUtils.radToDeg(e.y).toFixed(2)),
+            z: Number(MathUtils.radToDeg(e.z).toFixed(2)),
+          }
+        : null,
+      eyeLookDeg,
+      eyeRangeMap: this.eyeApplier?.rangeMapHorizontalInner
+        ? {
+            inputMaxValue: this.eyeApplier.rangeMapHorizontalInner.inputMaxValue,
+            outputScale: this.eyeApplier.rangeMapHorizontalInner.outputScale,
+          }
+        : null,
+      limits: {
+        yawDeg: this.getLimits().headYawMaxDeg,
+        pitchDeg: this.getLimits().headPitchMaxDeg,
+        eyeYawDeg: this.getLimits().eyeYawMaxDeg,
+        eyePitchDeg: this.getLimits().eyePitchMaxDeg,
+      },
+    }
   }
 
   private undoBoneLook(bone: Object3D | null, prev: Quaternion): void {

@@ -259,10 +259,12 @@ export {
   clampGazeLimits,
   DEFAULT_GAZE_LIMITS,
   GAZE_EYE_IDLE_MS,
+  COMPANION_EYE_YAW_MAX,
+  COMPANION_EYE_PITCH_MAX,
   faceFrontLookSpace,
   spineLookDeltaQuat,
 } from './gaze.js'
-export type { GazeLookOptions, GazeLimits, Xyz } from './gaze.js'
+export type { GazeLookOptions, GazeLimits, Xyz, LookAtRangeMapLike } from './gaze.js'
 export {
   EMOTION_ALIASES,
   classifyExpressionName,

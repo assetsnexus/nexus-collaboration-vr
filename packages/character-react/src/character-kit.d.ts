@@ -319,6 +319,12 @@ declare module '@nexus/character-kit' {
       setAnalogSpeed: (speed: number) => void
       /** Current ground pose (`x`/`y`/`z` + facing) for turn metadata. */
       getPoseFeedback: (nearbyRadiusM?: number) => Record<string, unknown> | null
+      /** Id of the gesture clip currently driving the body (null when idle). */
+      getGestureId?: () => string | null
+      /** Read-only gaze snapshot (head vs eye aim, limits) for live debugging. */
+      getGazeDebugState: () => Record<string, unknown> | null
+      /** Per-bone angle (deg) off rest, keyed by VRM bone name, for gesture audits. */
+      getBonePoseDeg?: () => Record<string, number> | null
     }
     director: {
       getPresence: () => { setMood: (mood: string) => boolean }
@@ -374,6 +380,8 @@ declare module '@nexus/character-kit' {
     /** Head/neck gaze cone (degrees) for a cursor that tracks across the screen. */
     setGazeLimits(limits: { headYawMaxDeg?: number; headPitchMaxDeg?: number; eyeYawMaxDeg?: number; eyePitchMaxDeg?: number }): void
     getGazeLimits(): { headYawMaxDeg: number; headPitchMaxDeg: number; eyeYawMaxDeg: number; eyePitchMaxDeg: number }
+    /** Read-only gaze snapshot (head vs eye aim, limits) for live debugging. */
+    getGazeDebugState(): Record<string, unknown> | null
     /** Solo click-ack (nod on page click): enable + pick the gesture. */
     setClickAckOptions(opts: { enabled?: boolean; clickGesture?: string; clickSpeed?: number; clickEnabled?: boolean; zoomEnabled?: boolean; zoomInGesture?: string; zoomOutGesture?: string }): void
     getClickAckOptions(): { enabled: boolean; clickGesture: string; clickEnabled: boolean; clickSpeed: number; zoomEnabled: boolean; zoomInGesture: string; zoomOutGesture: string } | null

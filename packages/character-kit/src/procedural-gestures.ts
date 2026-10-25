@@ -1210,6 +1210,311 @@ export function buildProceduralGestureClips(vrm: VRM): Array<{
     'Procedural jump pose',
   )
 
+  // --- Catalog ids the default gesture pack provides but the procedural builder
+  //     did not, so the id always resolves and the Gesture tester always lists it
+  //     (a pack-less host never shows a dead button). Cheap, relative-to-rest and
+  //     deliberately approximate — real VRMA always wins when the pack loads.
+
+  // Mirror of `wave` on the LEFT arm (pack: `wave_left`).
+  const waveRaiseL = withBone(A, [
+    { bone: VRMHumanBoneName.LeftShoulder, z: -14 * DEG },
+    { bone: VRMHumanBoneName.LeftUpperArm, x: 5 * DEG, y: -25 * DEG, z: 88 * DEG },
+    { bone: VRMHumanBoneName.LeftLowerArm, y: -55 * DEG },
+  ])
+  add(
+    'wave_left',
+    [0, 0.16, 0.34, 0.52, 0.7, 0.9],
+    [
+      A,
+      withBone(waveRaiseL, [
+        { bone: VRMHumanBoneName.LeftHand, x: 10 * DEG, y: -22 * DEG },
+        { bone: VRMHumanBoneName.Head, y: -5 * DEG },
+      ]),
+      withBone(waveRaiseL, [{ bone: VRMHumanBoneName.LeftHand, x: 10 * DEG, y: 22 * DEG }]),
+      withBone(waveRaiseL, [{ bone: VRMHumanBoneName.LeftHand, x: 10 * DEG, y: -22 * DEG }]),
+      withBone(waveRaiseL, [{ bone: VRMHumanBoneName.LeftHand, x: 10 * DEG, y: 18 * DEG }]),
+      A,
+    ],
+    false,
+    'Procedural left-hand wave (arm-only overlay)',
+  )
+
+  // Both hands up + side wiggle (pack: `wave_both`).
+  const waveRaiseBoth = withBone(waveRaise, waveRaiseL)
+  add(
+    'wave_both',
+    [0, 0.2, 0.45, 0.7, 0.98],
+    [
+      A,
+      withBone(waveRaiseBoth, [
+        { bone: VRMHumanBoneName.RightHand, x: 10 * DEG, y: 18 * DEG },
+        { bone: VRMHumanBoneName.LeftHand, x: 10 * DEG, y: -18 * DEG },
+      ]),
+      withBone(waveRaiseBoth, [
+        { bone: VRMHumanBoneName.RightHand, x: 10 * DEG, y: -18 * DEG },
+        { bone: VRMHumanBoneName.LeftHand, x: 10 * DEG, y: 18 * DEG },
+      ]),
+      withBone(waveRaiseBoth, [
+        { bone: VRMHumanBoneName.RightHand, x: 10 * DEG, y: 16 * DEG },
+        { bone: VRMHumanBoneName.LeftHand, x: 10 * DEG, y: -16 * DEG },
+      ]),
+      A,
+    ],
+    false,
+    'Procedural two-handed wave (arm-only overlay)',
+  )
+
+  // Gentle speaking sway (pack: `talk`, loop).
+  add(
+    'talk',
+    [0, 1.2, 2.4],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: 3 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: -3 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -2 * DEG, y: 3 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(66) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(66) },
+      ]),
+      R,
+    ],
+    true,
+    'Procedural speaking sway (loop)',
+  )
+
+  // Sway variant of the weight shift (pack: `weight_shift_sway`).
+  add(
+    'weight_shift_sway',
+    [0, 0.7, 1.6, 2.4],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, z: 3 * DEG },
+        { bone: VRMHumanBoneName.Spine, z: 3 * DEG },
+        { bone: VRMHumanBoneName.Chest, z: 2 * DEG },
+        { bone: VRMHumanBoneName.Head, z: -2 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(70) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(60) },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, z: -3 * DEG },
+        { bone: VRMHumanBoneName.Spine, z: -3 * DEG },
+        { bone: VRMHumanBoneName.Chest, z: -2 * DEG },
+        { bone: VRMHumanBoneName.Head, z: 2 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(60) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(70) },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural sway weight shift',
+  )
+
+  // Standing shift, taller stance (pack: `weight_shift_stand`).
+  add(
+    'weight_shift_stand',
+    [0, 0.6, 1.4, 2.0],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -2 * DEG, z: 2 * DEG },
+        { bone: VRMHumanBoneName.Hips, z: 2 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -2 * DEG, z: -2 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(66) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(66) },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -1 * DEG, z: -2 * DEG },
+        { bone: VRMHumanBoneName.Hips, z: -2 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -1 * DEG, z: 2 * DEG },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural standing weight shift',
+  )
+
+  // Settle into the relaxed stance (pack: `relax_pose`).
+  add(
+    'relax_pose',
+    [0, 0.6, 1.6],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: 3 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: -3 * DEG },
+        { bone: VRMHumanBoneName.Head, x: 2 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(66) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(66) },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural relax into stance',
+  )
+
+  // Longer stretch, arms overhead (pack: `sport`).
+  add(
+    'sport',
+    [0, 0.7, 1.5, 2.4, 3.2],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: -55 * DEG, z: 70 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: -55 * DEG, z: -70 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -6 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -8 * DEG, z: 4 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: -5 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: -64 * DEG, y: 8 * DEG, z: 76 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: -64 * DEG, y: -8 * DEG, z: -76 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -10 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: -4 * DEG, z: -4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: -55 * DEG, z: 70 * DEG },
+        { bone: VRMHumanBoneName.RightUpperArm, x: -55 * DEG, z: -70 * DEG },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural sport / long stretch (arms overhead)',
+  )
+
+  // Rise from the seated rest to standing (pack: `stand_up`).
+  const sitFrame = withBone(R, [
+    { bone: VRMHumanBoneName.Hips, x: 62 * DEG },
+    { bone: VRMHumanBoneName.LeftUpperLeg, x: -82 * DEG },
+    { bone: VRMHumanBoneName.RightUpperLeg, x: -82 * DEG },
+    { bone: VRMHumanBoneName.LeftLowerLeg, x: 84 * DEG },
+    { bone: VRMHumanBoneName.RightLowerLeg, x: 84 * DEG },
+  ])
+  add(
+    'stand_up',
+    [0, 0.5, 1.2],
+    [
+      sitFrame,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, x: 22 * DEG },
+        { bone: VRMHumanBoneName.Spine, x: 10 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperLeg, x: -40 * DEG },
+        { bone: VRMHumanBoneName.RightUpperLeg, x: -40 * DEG },
+        { bone: VRMHumanBoneName.LeftLowerLeg, x: 44 * DEG },
+        { bone: VRMHumanBoneName.RightLowerLeg, x: 44 * DEG },
+        { bone: VRMHumanBoneName.Head, x: 4 * DEG },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural stand up from sit',
+  )
+
+  // Tense, forward stance (pack: `angry`).
+  add(
+    'angry',
+    [0, 0.4, 1.0, 1.6],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: 6 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: 5 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -5 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, x: 4 * DEG, z: hangL(58) },
+        { bone: VRMHumanBoneName.RightUpperArm, x: 4 * DEG, z: hangR(58) },
+        { bone: VRMHumanBoneName.LeftLowerArm, y: 34 * DEG },
+        { bone: VRMHumanBoneName.RightLowerArm, y: -34 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Spine, x: 8 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: 6 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -7 * DEG, z: 3 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(56) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(56) },
+        { bone: VRMHumanBoneName.LeftLowerArm, y: 38 * DEG },
+        { bone: VRMHumanBoneName.RightLowerArm, y: -38 * DEG },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural tense stance (angry)',
+  )
+
+  // Bashful: head down, hands drawn up toward the face (pack: `blush`). Arm-only
+  // base (overlay) so it never steals the standing loop's body keys.
+  const blushRaise = withBone(A, [
+    { bone: VRMHumanBoneName.RightShoulder, z: 6 * DEG },
+    { bone: VRMHumanBoneName.LeftShoulder, z: -6 * DEG },
+    { bone: VRMHumanBoneName.RightUpperArm, x: 2 * DEG, y: 10 * DEG, z: -46 * DEG },
+    { bone: VRMHumanBoneName.LeftUpperArm, x: 2 * DEG, y: -10 * DEG, z: 46 * DEG },
+    { bone: VRMHumanBoneName.RightLowerArm, y: 54 * DEG },
+    { bone: VRMHumanBoneName.LeftLowerArm, y: -54 * DEG },
+  ])
+  add(
+    'blush',
+    [0, 0.5, 1.2, 1.8],
+    [
+      A,
+      withBone(blushRaise, [
+        { bone: VRMHumanBoneName.Head, x: 12 * DEG, z: 4 * DEG },
+        { bone: VRMHumanBoneName.Neck, x: 5 * DEG },
+      ]),
+      withBone(blushRaise, [
+        { bone: VRMHumanBoneName.Head, x: 10 * DEG, z: -4 * DEG },
+        { bone: VRMHumanBoneName.Neck, x: 4 * DEG },
+      ]),
+      A,
+    ],
+    false,
+    'Procedural bashful beat (head down, hands up — arm-only overlay)',
+  )
+
+  // The `orbit` gesture: the torso traces a slow circle (lean left → forward →
+  // right → back) with the arms hanging near rest. A **body** motion (keys hips/
+  // spine) that is deliberately NOT a wave: the arms stay at the idle hang, so a
+  // request never lifts a hand or breaks the elbow. (The default gesture pack
+  // ships no `orbit` clip, so this fallback is what the id resolves to.)
+  add(
+    'orbit',
+    [0, 0.6, 1.2, 1.8, 2.4, 3.0],
+    [
+      R,
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, z: 8 * DEG },
+        { bone: VRMHumanBoneName.Spine, z: 6 * DEG },
+        { bone: VRMHumanBoneName.Chest, z: 3 * DEG },
+        { bone: VRMHumanBoneName.Head, z: -4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(70) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(60) },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, x: 8 * DEG },
+        { bone: VRMHumanBoneName.Spine, x: 6 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: 3 * DEG },
+        { bone: VRMHumanBoneName.Head, x: -3 * DEG },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, z: -8 * DEG },
+        { bone: VRMHumanBoneName.Spine, z: -6 * DEG },
+        { bone: VRMHumanBoneName.Chest, z: -3 * DEG },
+        { bone: VRMHumanBoneName.Head, z: 4 * DEG },
+        { bone: VRMHumanBoneName.LeftUpperArm, z: hangL(60) },
+        { bone: VRMHumanBoneName.RightUpperArm, z: hangR(70) },
+      ]),
+      withBone(R, [
+        { bone: VRMHumanBoneName.Hips, x: -6 * DEG },
+        { bone: VRMHumanBoneName.Spine, x: -4 * DEG },
+        { bone: VRMHumanBoneName.Chest, x: -2 * DEG },
+        { bone: VRMHumanBoneName.Head, x: 4 * DEG },
+      ]),
+      R,
+    ],
+    false,
+    'Procedural orbit — torso traces a slow circle (body; arms stay at hang)',
+  )
+
   return out
 }
 

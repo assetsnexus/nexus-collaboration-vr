@@ -5,13 +5,18 @@ import {
   CharacterGaze,
   clamp,
   clampGazeLimits,
+  COMPANION_EYE_PITCH_MAX,
+  COMPANION_EYE_YAW_MAX,
   DEFAULT_GAZE_LIMITS,
   desiredIdleBodyYaw,
   expSmooth,
+  eyeLookRangeMap,
   faceFrontLookSpace,
   locoRigYaw,
   parseLookAtTarget,
   pointerLookPoint,
+  residualLookOffsets,
+  resolveLookAtBoneApplier,
   spineLookDeltaQuat,
   wrapPi,
   yawTowardXZ,
@@ -315,4 +320,153 @@ describe('CharacterGaze external pointer', () => {
     assert.equal(gaze.isPointerTracking(), true)
   })
 })
+
+describe('residualLookOffsets (head vs eye cones)', () => {
+  const head = { x: 0, y: 1.4, z: 0 }
+
+  it('yaws toward the target, clamped to the per-surface cone', () => {
+    // Target 3 m to the +X side, at head height, character facing +Z (yaw 0).
+    const headYawMax = (20 * Math.PI) / 180
+    const eyeYawMax = (70 * Math.PI) / 180
+    const target = { x: 3, y: 1.4, z: 0 }
+    const headOff = residualLookOffsets(head, target, 0, headYawMax, headYawMax)
+    const eyeOff = residualLookOffsets(head, target, 0, eyeYawMax, eyeYawMax)
+    // Same world target, but the head clamps at its narrow cone and the eyes
+    // reach further — this is exactly why the irises lead the head.
+    assert.ok(Math.abs(headOff.yaw - headYawMax) < 1e-9, `head ${headOff.yaw}`)
+    assert.ok(Math.abs(eyeOff.yaw - eyeYawMax) < 1e-9, `eyes ${eyeOff.yaw}`)
+    assert.ok(Math.abs(eyeOff.yaw) > Math.abs(headOff.yaw), 'eyes lead the head')
+  })
+
+  it('clamps both yaw and pitch symmetrically', () => {
+    const yawMax = (30 * Math.PI) / 180
+    const pitchMax = (12 * Math.PI) / 180
+    // Target behind-left and straight above → both axes saturate.
+    const above = { x: -5, y: 6, z: -5 }
+    const off = residualLookOffsets(head, above, 0, yawMax, pitchMax)
+    assert.ok(Math.abs(off.yaw) <= yawMax + 1e-9)
+    assert.ok(off.pitch <= 1e-9 && off.pitch >= -pitchMax - 1e-9, `pitch ${off.pitch}`)
+    assert.ok(Math.abs(off.pitch - -pitchMax) < 1e-9 || Math.abs(off.pitch + pitchMax) < 1e-9)
+  })
+
+  it('returns 0 yaw/pitch when the target sits on the facing axis', () => {
+    const off = residualLookOffsets(head, { x: 0, y: 1.4, z: 2 }, 0, 1, 1)
+    assert.ok(Math.abs(off.yaw) < 1e-9)
+    assert.ok(Math.abs(off.pitch) < 1e-9)
+  })
+})
+
+describe('CharacterGaze per-surface eye cones', () => {  it('keeps a wider eye cone than the head cone (eyes glance past the nose)', () => {
+    const gaze = new CharacterGaze()
+    const lim = gaze.setLimits({ headYawMaxDeg: 20, headPitchMaxDeg: 22 })
+    assert.ok(lim.eyeYawMaxDeg >= lim.headYawMaxDeg + 8, `${lim.eyeYawMaxDeg} vs ${lim.headYawMaxDeg}`)
+    assert.ok(lim.eyePitchMaxDeg >= lim.headPitchMaxDeg + 4)
+  })
+
+  it('honours an explicit eye yaw of 0 (locked eyes are a valid setting)', () => {
+    const gaze = new CharacterGaze()
+    const lim = gaze.setLimits({ headYawMaxDeg: 20, eyeYawMaxDeg: 0 })
+    assert.equal(lim.eyeYawMaxDeg, 0)
+  })
+
+  it('exposes the companion-surface eye defaults (70° / 30°)', () => {
+    assert.ok(Math.abs((COMPANION_EYE_YAW_MAX * 180) / Math.PI - 70) < 1e-6)
+    assert.ok(Math.abs((COMPANION_EYE_PITCH_MAX * 180) / Math.PI - 30) < 1e-6)
+    assert.equal(DEFAULT_GAZE_LIMITS.eyeYawMaxDeg, 70)
+    assert.equal(DEFAULT_GAZE_LIMITS.eyePitchMaxDeg, 30)
+  })
+
+  it('drives eye aims toward the target through the wider cone (no lookAt applyer)', () => {
+    // A rig without a VRM `lookAt` uses the eye-bone fallback: the eye delta rushes
+    // to the SAME residual as the head, but clamped to the wider eye cone.
+    const headYawMax = (20 * Math.PI) / 180
+    const eyeYawMax = (70 * Math.PI) / 180
+    const target = { x: 4, y: 1.4, z: 0.2 }
+    const head = residualLookOffsets({ x: 0, y: 1.4, z: 0 }, target, 0, headYawMax, headYawMax)
+    const eye = residualLookOffsets({ x: 0, y: 1.4, z: 0 }, target, 0, eyeYawMax, eyeYawMax)
+    assert.ok(Math.abs(head.yaw) - headYawMax < 1e-9)
+    assert.ok(Math.abs(eye.yaw) > Math.abs(head.yaw))
+  })
+})
+
+/**
+ * The "head tracks but the eyes do not" bug: three-vrm's `VRMLookAtBoneApplier`
+ * defaults to `outputScale 10` / `inputMaxValue 90`, so it rotates the eye bones
+ * only ~1/9 of the residual gaze. The applier's own math is
+ * `outputScale * clamp(input / inputMaxValue)` (degrees out for degrees in), so
+ * the maps must be identity-with-a-clamp at the eye cone for the irises to reach
+ * the same residual the head left behind.
+ */
+describe('eyeLookRangeMap / retune', () => {
+  it('is an identity map clamped at the eye cone (no squash)', () => {
+    const map = eyeLookRangeMap(70)
+    assert.ok(map)
+    assert.equal(map.inputMaxValue, 70)
+    assert.equal(map.outputScale, 70)
+    // A 35° residual through the map → 35° of eye rotation, not 3.5° (the default).
+    assert.ok(Math.abs(map.outputScale * Math.min(1, 35 / map.inputMaxValue) - 35) < 1e-9)
+  })
+
+  it('clamps the eye rotation at the cone for a larger residual', () => {
+    const map = eyeLookRangeMap(30)
+    assert.ok(map)
+    // A 90° residual saturates at the 30° cone.
+    assert.ok(Math.abs(map.outputScale * Math.min(1, 90 / map.inputMaxValue) - 30) < 1e-9)
+  })
+
+  it('rejects a non-positive cone (locked eyes = no retune)', () => {
+    assert.equal(eyeLookRangeMap(0), null)
+    assert.equal(eyeLookRangeMap(-5), null)
+    assert.equal(eyeLookRangeMap(Number.NaN), null)
+  })
+
+  it('detects only a bone applier (never an expression applier)', () => {
+    const bone = {
+      humanoid: {},
+      applyYawPitch: () => undefined,
+      rangeMapHorizontalInner: { inputMaxValue: 90, outputScale: 10 },
+      rangeMapHorizontalOuter: { inputMaxValue: 90, outputScale: 10 },
+    }
+    assert.ok(resolveLookAtBoneApplier({ lookAt: { applier: bone } } as never))
+    // Expression applier: no `humanoid` marker on the applier.
+    const expr = { applyYawPitch: () => undefined, rangeMapHorizontalInner: {} }
+    assert.equal(resolveLookAtBoneApplier({ lookAt: { applier: expr } } as never), null)
+    assert.equal(resolveLookAtBoneApplier(null), null)
+    assert.equal(resolveLookAtBoneApplier({} as never), null)
+  })
+
+  it('retunes the live applier maps on bind and limit change', () => {
+    const applier = {
+      humanoid: {},
+      applyYawPitch: () => undefined,
+      rangeMapHorizontalInner: { inputMaxValue: 90, outputScale: 10 },
+      rangeMapHorizontalOuter: { inputMaxValue: 90, outputScale: 10 },
+      rangeMapVerticalDown: { inputMaxValue: 90, outputScale: 10 },
+      rangeMapVerticalUp: { inputMaxValue: 90, outputScale: 10 },
+    }
+    const gaze = new CharacterGaze()
+    const vrm = {
+      scene: new Object3D(),
+      lookAt: {
+        applier,
+        faceFront: { x: 0, y: 0, z: 1 },
+        getLookAtWorldDirection: (out: { set: (x: number, y: number, z: number) => unknown }) =>
+          out.set(0, 0, 1),
+      },
+      humanoid: { getRawBoneNode: () => null, getNormalizedBoneNode: () => null },
+    }
+    gaze.bind(vrm as never)
+    // The default 70° / 30° cone becomes an identity-with-clamp map.
+    assert.ok(Math.abs(applier.rangeMapHorizontalInner.outputScale - 70) < 1e-6)
+    assert.ok(Math.abs(applier.rangeMapHorizontalInner.inputMaxValue - 70) < 1e-6)
+    assert.ok(Math.abs(applier.rangeMapVerticalUp.outputScale - 30) < 1e-6)
+
+    // A live limit change re-tunes the maps in place. `eyePitchMaxDeg` must clear
+    // the auto-widen floor (head pitch + 4°), so 30 is honoured verbatim.
+    gaze.setLimits({ eyeYawMaxDeg: 48, eyePitchMaxDeg: 30 })
+    assert.ok(Math.abs(applier.rangeMapHorizontalOuter.outputScale - 48) < 1e-6)
+    assert.ok(Math.abs(applier.rangeMapVerticalDown.inputMaxValue - 30) < 1e-6)
+  })
+})
+
 

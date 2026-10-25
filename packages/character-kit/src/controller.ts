@@ -1138,6 +1138,27 @@ export class CharacterController {
     return this.currentGestureId
   }
 
+  /**
+   * Read-only per-bone pose snapshot: the angle (degrees) of each humanoid bone
+   * off its captured rest quaternion, keyed by canonical VRM bone name. Used by
+   * live CDP auditing to prove a gesture drives the bones it should (e.g. `orbit`
+   * leans the stance instead of lifting an arm) without a pixel screenshot.
+   * Returns `null` before a VRM is bound.
+   */
+  getBonePoseDeg(): Record<string, number> | null {
+    if (!this.vrm?.humanoid || !this.humanoidRest.length) return null
+    const out: Record<string, number> = {}
+    for (const hold of this.humanoidRest) {
+      const node = this.vrm.humanoid.getNormalizedBoneNode(hold.bone as VRMHumanBoneName)
+      if (!node) continue
+      const dot = Math.abs(node.quaternion.dot(hold.quat))
+      out[hold.bone] = Number(
+        THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, dot))).toFixed(2),
+      )
+    }
+    return out
+  }
+
   getLocomotionSnapshot(): LocomotionSnapshot {
     return this.loco.snapshot()
   }
@@ -2471,6 +2492,11 @@ export class CharacterController {
 
   getGazeLimits(): GazeLimits {
     return this.gaze.getLimits()
+  }
+
+  /** Read-only gaze snapshot for live debugging (head vs eye aim, limits). */
+  getGazeDebugState() {
+    return this.gaze.getDebugState()
   }
 
   /** Speech lock: watch the camera; pointer/idle wait. Explicit xyz still wins. */
