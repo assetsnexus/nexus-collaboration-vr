@@ -1101,6 +1101,17 @@ export class SceneRoom {
   }
 
   /**
+   * Apply an in-window DOM pointer sample to every occupant. A no-op per
+   * occupant while the OS-global (external) feed is armed, so the room's
+   * external writer stays the single source of aim.
+   */
+  applyDomPointerNdc(ndcX: number, ndcY: number): void {
+    for (const avatar of this.avatars.values()) {
+      avatar.controller.applyDomPointerNdc(ndcX, ndcY)
+    }
+  }
+
+  /**
    * Set the head/neck gaze cone (degrees) for every occupant, and remember it so
    * avatars added later inherit it. The desktop companion widens this beyond the
    * tight library default so the head visibly turns as the cursor crosses the
@@ -1456,16 +1467,14 @@ export class SceneRoom {
     if (this.disposed) return
     this.sceneFx.hoverAt(this.camera, this.canvas, event.clientX, event.clientY)
     if (!this.pointerLookEnabled || this.avatars.size === 0) return
-    // An OS-global cursor feed owns the aim; in-window DOM moves would fight it.
-    if (this.externalPointerLook) return
     const rect = this.canvas.getBoundingClientRect()
     const width = rect.width || 1
     const height = rect.height || 1
     const ndcX = ((event.clientX - rect.left) / width) * 2 - 1
     const ndcY = -(((event.clientY - rect.top) / height) * 2 - 1)
-    for (const avatar of this.avatars.values()) {
-      avatar.controller.setPointerNdc(ndcX, ndcY)
-    }
+    // No-op per occupant while the OS-global (external) feed is armed: the
+    // room's external writer must remain the single source of aim.
+    this.applyDomPointerNdc(ndcX, ndcY)
   }
 
   private onPointerLeave(): void {

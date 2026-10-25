@@ -339,6 +339,13 @@ export class CharacterGaze {
    * coords) rather than DOM pointer events, so window-leave must not clear it.
    */
   private externalPointer = false
+  /**
+   * Which input last armed the pointer aim. There must be exactly **one** writer
+   * for the aim: the OS-global (external) feed wins whenever it is armed, and an
+   * in-webview DOM sample is rejected while it is — otherwise the two writers
+   * fight and the head tracks only one of them depending on event order.
+   */
+  private pointerWriter: 'none' | 'dom' | 'external' = 'none'
   private ndcX = 0
   private ndcY = 0
   private explicit: Xyz | null = null
@@ -443,6 +450,9 @@ export class CharacterGaze {
   setExternalPointerEnabled(on: boolean): void {
     this.externalPointer = on
     if (!on) this.pointerOver = false
+    // Hand the aim back to the DOM when the feed is disarmed, so a host that
+    // drops the OS-global feed does not leave the gaze frozen on its last sample.
+    if (!on && this.pointerWriter === 'external') this.pointerWriter = 'none'
   }
 
   setBodyFollowCamera(on: boolean): void {
@@ -451,6 +461,28 @@ export class CharacterGaze {
       // Keep current hips; otherwise idle would lerp back to spawn facing.
       this.locoYaw = wrapPi(this.bodyYaw + this.restForwardYaw)
     }
+  }
+
+  /**
+   * Sample from the in-webview DOM pointer. A **no-op while the OS-global feed
+   * is armed** (`setExternalPointerEnabled(true)`), so the external sampler stays
+   * the single writer of the aim and the two feeds never fight. Returns whether
+   * the sample was applied.
+   */
+  setDomPointerNdc(ndcX: number, ndcY: number): boolean {
+    if (this.externalPointer) return false
+    this.setPointerNdc(ndcX, ndcY)
+    this.pointerWriter = 'dom'
+    return true
+  }
+
+  /**
+   * Own the aim from an external cursor feed (alias of {@link setPointerNdc} for
+   * symmetry with {@link setDomPointerNdc}; marks the external writer active).
+   */
+  setExternalPointerNdc(ndcX: number, ndcY: number): void {
+    this.setPointerNdc(ndcX, ndcY)
+    this.pointerWriter = 'external'
   }
 
   setPointerNdc(ndcX: number, ndcY: number): void {

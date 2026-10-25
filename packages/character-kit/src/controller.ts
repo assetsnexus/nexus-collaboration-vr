@@ -504,7 +504,18 @@ export class CharacterController {
   }
 
   setPointerNdc(x: number, y: number): void {
-    this.gaze.setPointerNdc(x, y)
+    // External (OS-global) feed owns the aim; it is the single writer while armed.
+    this.gaze.setExternalPointerNdc(x, y)
+  }
+
+  /**
+   * Apply an in-window DOM pointer sample. A **no-op while the external
+   * OS-global feed is armed** (`setExternalPointerEnabled(true)`), so the
+   * external sampler is the single writer of the aim and the two feeds never
+   * fight. Returns whether the sample was applied.
+   */
+  applyDomPointerNdc(x: number, y: number): boolean {
+    return this.gaze.setDomPointerNdc(x, y)
   }
 
   /**
@@ -2487,10 +2498,10 @@ export class CharacterController {
   private onPointerMove(e: PointerEvent): void {
     if (this.ownsSceneFx) this.sceneFx.hoverAt(this.camera, this.canvas, e.clientX, e.clientY)
     if (!this.gaze.pointerEnabled) return
-    // An OS-global cursor feed owns the aim; in-window DOM moves would fight it.
-    if (this.externalPointerLook) return
     const ndc = this.pointerNdc(e)
-    this.gaze.setPointerNdc(ndc.x, ndc.y)
+    // The external (OS-global) feed is armed → the DOM sample is rejected by the
+    // gaze itself, so the two writers can never disagree about the aim.
+    this.gaze.setDomPointerNdc(ndc.x, ndc.y)
   }
 
   /** Cursor left the browser chrome / window lost focus — stop tracking. */

@@ -278,5 +278,41 @@ describe('CharacterGaze external pointer', () => {
     assert.equal(gaze.isPointerOver(), true)
     assert.equal(gaze.isPointerTracking(), true)
   })
+
+  /**
+   * The two-writer regression: the OS-global sampler (external) and the
+   * in-webview DOM `pointermove` both pushed aim. Whichever fired last won, so
+   * the head tracked "one or the other, never both" depending on event order.
+   * Exactly one writer must own the aim — the external feed while it is armed.
+   */
+  it('rejects an in-webview DOM sample while the external feed is armed', () => {
+    const gaze = new CharacterGaze()
+    gaze.setExternalPointerEnabled(true)
+    gaze.setExternalPointerNdc(0.4, 0.2)
+    // A DOM sample arrives (cursor inside the webview): it must be ignored, so
+    // the external position wins regardless of event order.
+    assert.equal(gaze.setDomPointerNdc(-0.9, -0.9), false)
+    assert.equal(gaze.isPointerTracking(), true)
+    // The aim still reflects the external sample, not the rejected DOM one.
+    gaze.setExternalPointerNdc(0.4, 0.2)
+    assert.equal(gaze.isPointerOver(), true)
+  })
+
+  it('accepts the DOM sample again once the external feed is disarmed', () => {
+    const gaze = new CharacterGaze()
+    gaze.setExternalPointerEnabled(true)
+    gaze.setExternalPointerNdc(0.4, 0.2)
+    assert.equal(gaze.setDomPointerNdc(-0.5, 0.5), false)
+    // Host drops the OS-global feed (e.g. no companion): the DOM path resumes.
+    gaze.setExternalPointerEnabled(false)
+    assert.equal(gaze.setDomPointerNdc(-0.5, 0.5), true)
+    assert.equal(gaze.isPointerTracking(), true)
+  })
+
+  it('applies a DOM sample when no external feed was ever armed', () => {
+    const gaze = new CharacterGaze()
+    assert.equal(gaze.setDomPointerNdc(0.25, -0.25), true)
+    assert.equal(gaze.isPointerTracking(), true)
+  })
 })
 
