@@ -43,7 +43,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^3.7.2",
-    "@ricky0123/vad-web": "^0.0.24"
+    "@ricky0123/vad-web": "^0.0.31"
   },
   "devDependencies": {
     "typescript": "^5.9.2"

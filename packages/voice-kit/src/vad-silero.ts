@@ -7,9 +7,10 @@ export interface SileroVadOptions {
   onnxWASMBasePath?: string
   positiveSpeechThreshold?: number
   negativeSpeechThreshold?: number
-  /** Frames to wait after speech drop before ending (~30ms/frame at 1536@16k) */
-  redemptionFrames?: number
-  minSpeechFrames?: number
+  /** Milliseconds to wait after speech drop before ending (vad-web >=0.0.31 uses ms) */
+  redemptionMs?: number
+  /** Minimum speech duration in ms before a segment counts (vad-web >=0.0.31 uses ms) */
+  minSpeechMs?: number
 }
 
 /**
@@ -25,8 +26,11 @@ export async function createSileroVadSession(
     onnxWASMBasePath: options.onnxWASMBasePath,
     positiveSpeechThreshold: options.positiveSpeechThreshold ?? 0.6,
     negativeSpeechThreshold: options.negativeSpeechThreshold ?? 0.35,
-    redemptionFrames: options.redemptionFrames ?? 24,
-    minSpeechFrames: options.minSpeechFrames ?? 8,
+    // vad-web 0.0.31 renamed redemptionFrames -> redemptionMs; keep the previous
+    // ~24-frame hangover (24 x 96ms @ 1536 samples / 16kHz) to preserve behaviour.
+    redemptionMs: options.redemptionMs ?? 2304,
+    // 8 frames x 96ms previously; preserve the minimum-speech window in ms.
+    minSpeechMs: options.minSpeechMs ?? 768,
     onFrameProcessed: (probabilities, frame) => {
       if (!callbacks.onFrameProcessed) return
       let sum = 0

@@ -5,6 +5,9 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
     "noEmit": true,
+    // character-kit sources are consumed via `paths` and use `.ts` import
+    // specifiers (its own tsconfig enables this); allow them here too.
+    "allowImportingTsExtensions": true,
     "paths": {
       "@nexus/character-kit": ["../../packages/character-kit/src/index.ts"],
       "@nexus/voice-kit": ["../../packages/voice-kit/src/index.ts"]

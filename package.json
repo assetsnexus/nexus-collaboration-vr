@@ -7,5 +7,11 @@
     "dev": "pnpm --filter @nexus/vrm-playground dev",
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck"
+  },
+  "pnpm": {
+    "overrides": {
+      "sharp": "^0.35.5",
+      "source-map-js": "^1.2.2"
+    }
   }
 }
