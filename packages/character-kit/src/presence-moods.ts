@@ -10,6 +10,8 @@ export type PresenceMoodId =
   | 'tired'
   | 'sad'
   | 'excited'
+  | 'worried'
+  | 'annoyed'
 
 export interface PresenceMoodDef {
   id: PresenceMoodId
@@ -149,6 +151,43 @@ export const PRESENCE_MOODS: Record<PresenceMoodId, PresenceMoodDef> = {
     mediumGestures: ['wave', 'surprised', 'stretch', 'clap'],
     longGestures: ['sit'],
   },
+  /**
+   * Plan §P6c — the first *negative-valence* moods with real clips. Before this
+   * an anxious agent had to alias onto `focused`, so a worried companion read as
+   * a calm one. `faceIntensity` stays low (0.4) so it reads as concern, not
+   * alarm: `surprised` at full strength is a startle.
+   */
+  worried: {
+    id: 'worried',
+    description: 'Concerned ambient; uneasy fidgets, faster tempo, slow rests',
+    faceEmotion: 'surprised',
+    faceIntensity: 0.4,
+    tempo: 0.78,
+    longIdleScale: 1.06,
+    idleTimeScale: 1.06,
+    sitFidgets: ['sit_wave'],
+    microGestures: ['look_around', 'think', 'weight_shift'],
+    mediumGestures: ['think', 'look_around_turn', 'scratch_nose'],
+    longGestures: ['sit'],
+  },
+  /**
+   * Plan §P6c — mock-impatient / sassy ambient for a funny-pissed personality.
+   * Deliberately low `faceIntensity` (0.35): the anger clip at full strength is
+   * hostile, and this mood is meant to be *comedic* impatience.
+   */
+  annoyed: {
+    id: 'annoyed',
+    description: 'Impatient ambient; disagree beats, faster tempo, quick rests',
+    faceEmotion: 'angry',
+    faceIntensity: 0.35,
+    tempo: 0.8,
+    longIdleScale: 1.08,
+    idleTimeScale: 1.08,
+    sitFidgets: ['sit_wave'],
+    microGestures: ['disagree', 'look_around', 'weight_shift'],
+    mediumGestures: ['angry', 'disagree', 'think', 'look_around'],
+    longGestures: ['sit'],
+  },
 }
 
 export function listPresenceMoods(): PresenceMoodDef[] {
@@ -173,6 +212,21 @@ const PRESENCE_MOOD_ALIASES: Record<string, PresenceMoodId> = {
   down: 'sad',
   sleepy: 'tired',
   attentive: 'curious',
+  // Plan §P6c — richer aliases onto the two new negative-valence moods, plus
+  // the "amused" family that belongs on `playful`.
+  anxious: 'worried',
+  concerned: 'worried',
+  nervous: 'worried',
+  uneasy: 'worried',
+  impatient: 'annoyed',
+  irritated: 'annoyed',
+  frustrated: 'annoyed',
+  pissed: 'annoyed',
+  grumpy: 'annoyed',
+  exasperated: 'annoyed',
+  amused: 'playful',
+  cheeky: 'playful',
+  smug: 'playful',
 }
 
 /**

@@ -106,6 +106,26 @@ export function statusMood(state: string): string {
   return STATUS_MOOD[coalesceAgentStatusPhase(state)] || STATUS_MOOD[state] || 'focused'
 }
 
+/**
+ * Plan §P6c — the mood to show when a status motion ENDS.
+ *
+ * `STATUS_MOOD.done = 'neutral'` is right when nothing else is driving the
+ * avatar, but it silently clobbers a live emotion `presenceMood`: an agent that
+ * was `worried` about a cooling promise snapped back to `neutral` the moment its
+ * thinking beat finished. Prefer the live emotion mood, then the profile
+ * default, and only fall back to the status map.
+ */
+export function statusMoodAfterMotion(
+  state: string,
+  opts: { emotionMood?: string | null; defaultMood?: string | null } = {},
+): string {
+  const emotion = typeof opts.emotionMood === 'string' ? opts.emotionMood.trim() : ''
+  if (emotion) return emotion
+  const fallback = typeof opts.defaultMood === 'string' ? opts.defaultMood.trim() : ''
+  if (fallback) return fallback
+  return statusMood(state)
+}
+
 export function statusGesture(state: string): string | null {
   return STATUS_GESTURE[coalesceAgentStatusPhase(state)] || STATUS_GESTURE[state] || null
 }

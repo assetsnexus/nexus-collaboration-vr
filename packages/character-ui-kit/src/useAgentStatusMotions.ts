@@ -5,6 +5,7 @@ import {
   motionsForState,
   pickStatusGesture,
   statusMood,
+  statusMoodAfterMotion,
   type AgentLiveStatus,
   type StatusMotionMap,
 } from './agent-status-gestures.js'
@@ -35,6 +36,15 @@ export type UseAgentStatusMotionsArgs = {
   enabled?: boolean
   focusedSlug?: string
   onMood?: (mood: string) => void
+  /**
+   * Plan §P6c — the live emotion `presenceMood` (from `companionState`).
+   * When set, leaving a live status restores THIS mood instead of the
+   * hardcoded `STATUS_MOOD.done = 'neutral'`, so a `worried`/`annoyed` agent
+   * does not snap back to neutral when its thinking beat ends.
+   */
+  emotionMood?: string | null
+  /** Plan §P6c — the profile default mood, used when no emotion mood is live. */
+  defaultMood?: string | null
 }
 
 /** Min gap between status gesture plays (avoids storm when WS status flips). */
@@ -54,6 +64,8 @@ export function useAgentStatusMotions({
   enabled = true,
   focusedSlug,
   onMood,
+  emotionMood,
+  defaultMood,
 }: UseAgentStatusMotionsArgs): void {
   const lastGestureRef = useRef<string | null>(null)
   const lastMoodRef = useRef<string | null>(null)
@@ -68,7 +80,10 @@ export function useAgentStatusMotions({
 
     const phase = coalesceAgentStatusPhase(agentStatus.state)
     const live = isLiveAgentState(phase)
-    const nextMood = statusMood(phase)
+    // §P6c — while idle/done, prefer the live emotion mood over `neutral`.
+    const nextMood = live
+      ? statusMood(phase)
+      : statusMoodAfterMotion(phase, { emotionMood, defaultMood })
 
     if (lastMoodRef.current !== nextMood) {
       const applied = host.setMood ? host.setMood(nextMood, 'agent', 'status') : false
@@ -124,7 +139,7 @@ export function useAgentStatusMotions({
       // Keep presence paused across same-agent phase transitions; resume only
       // when leaving live work (handled above) or unmounting the host later.
     }
-  }, [agentStatus?.authorSlug, agentStatus?.state, enabled, focusedSlug, host, motions, onMood])
+  }, [agentStatus?.authorSlug, agentStatus?.state, enabled, focusedSlug, host, motions, onMood, emotionMood, defaultMood])
 
   useEffect(() => {
     return () => {

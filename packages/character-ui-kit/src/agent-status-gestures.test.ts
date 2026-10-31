@@ -12,6 +12,7 @@ import {
   serializeStatusMotions,
   statusGesture,
   statusMood,
+  statusMoodAfterMotion,
 } from '../dist/agent-status-gestures.js'
 
 describe('coalesceAgentStatusPhase', () => {
@@ -46,6 +47,25 @@ describe('statusMood / statusGesture', () => {
     assert.equal(statusGesture('thinking'), 'think')
     assert.equal(statusGesture('writing'), 'nod')
     assert.equal(statusGesture('running'), 'nod')
+  })
+})
+
+describe('statusMoodAfterMotion (P6c clobber fix)', () => {
+  it('restores the live emotion mood instead of the hardcoded neutral', () => {
+    assert.equal(statusMoodAfterMotion('done', { emotionMood: 'worried' }), 'worried')
+    assert.equal(statusMoodAfterMotion('done', { emotionMood: 'annoyed' }), 'annoyed')
+    // Whitespace-tolerant, like the rest of the module.
+    assert.equal(statusMoodAfterMotion('done', { emotionMood: '  playful ' }), 'playful')
+  })
+
+  it('falls back to the profile default mood when no emotion mood is live', () => {
+    assert.equal(statusMoodAfterMotion('done', { emotionMood: null, defaultMood: 'calm' }), 'calm')
+    assert.equal(statusMoodAfterMotion('done', { emotionMood: '  ', defaultMood: ' relaxed ' }), 'relaxed')
+  })
+
+  it('keeps the status map when neither is known', () => {
+    assert.equal(statusMoodAfterMotion('done'), 'neutral')
+    assert.equal(statusMoodAfterMotion('thinking'), 'focused')
   })
 })
 
