@@ -332,6 +332,8 @@ export class CharacterController {
   private orbitFocusY = 1.7
   /** True while Shift/Ctrl/right-drag pan is held so follow-cam does not eat the offset. */
   private orbitPanning = false
+  /** A host-applied framing preset owns the camera; suppresses head reframing. */
+  private cameraPresetPinned = false
   /**
    * After locomotion, stand still this long then ease facing back to the user
    * (loco yaw 0 — gaze aims at the camera).
@@ -3003,6 +3005,47 @@ export class CharacterController {
   }
 
   /**
+   * Apply a camera framing preset (face / bust / full-body), placing the orbit
+   * camera at the preset's distance/height/FOV in front of the avatar and
+   * tilting it down by `pitchRad`. A missing pose falls back to the historical
+   * default framing.
+   *
+   * The desktop bridge derives these numbers from `companion-camera.ts` and
+   * passes them through, so no preset table lives in the library. Works without
+   * active OrbitControls too (embedded stages): the camera is still moved.
+   */
+  setCameraPreset(pose?: { distanceM?: number; heightM?: number; pitchRad?: number; fovDeg?: number } | null): void {
+    // Once a host applies a framing it stays pinned, so a later VRM head-load
+    // reframe cannot silently undo it. `null` clears the pin (back to default).
+    this.cameraPresetPinned = pose != null
+    const snap = this.loco.snapshot()
+    const distance =
+      Number.isFinite(pose?.distanceM) && (pose!.distanceM as number) > 0.4
+        ? (pose!.distanceM as number)
+        : 2.2
+    const height = Number.isFinite(pose?.heightM) ? (pose!.heightM as number) : this.orbitFocusY + 0.25
+    const pitch = Number.isFinite(pose?.pitchRad) ? (pose!.pitchRad as number) : 0
+    const fov = Number.isFinite(pose?.fovDeg) ? (pose!.fovDeg as number) : this.camera.fov
+
+    // A positive pitch looks down at the avatar: aim the camera at the point
+    // `distance * tan(pitch)` below its own height, so the preset's numbers
+    // (not the head bone) decide the framing. This is what must survive the
+    // post-load `frameOrbitOnHead()` call — the host re-applies the preset once
+    // the VRM is ready, and it owns the focus height from then on.
+    const focusY = height - distance * Math.tan(pitch)
+    this.orbitFocusY = focusY
+    this.orbitPanning = false
+    this.camera.fov = THREE.MathUtils.clamp(fov, 10, 90)
+    this.camera.updateProjectionMatrix()
+    this.camera.position.set(snap.x, height, snap.z + distance)
+    if (this.controls) {
+      this.controls.target.set(snap.x, focusY, snap.z)
+      this.controls.update()
+    }
+    this.logger.info?.('[character-kit] camera preset applied', { distance, height, fov })
+  }
+
+  /**
    * Recenter orbit on the avatar (clears Shift-pan offset) and restore the
    * default front distance / height.
    */
@@ -3010,6 +3053,8 @@ export class CharacterController {
     const snap = this.loco.snapshot()
     const y = this.orbitFocusY
     this.orbitPanning = false
+    // A manual reset releases the framing pin so head-reframing resumes.
+    this.cameraPresetPinned = false
     if (this.controls) {
       this.controls.target.set(snap.x, y, snap.z)
     }
@@ -3033,6 +3078,10 @@ export class CharacterController {
    */
   private frameOrbitOnHead(): void {
     if (!this.vrm || this.embedded) return
+    // A host-applied framing preset owns the focus height; re-framing on head
+    // load would clobber a face/full-body shot. The host re-applies the preset
+    // after the VRM is ready, so skip while one is pinned.
+    if (this.cameraPresetPinned) return
     this.rig.updateMatrixWorld(true)
     let focusY = this.orbitFocusY
     const head = this.vrm.humanoid?.getNormalizedBoneNode('head')

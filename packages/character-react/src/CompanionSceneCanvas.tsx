@@ -62,6 +62,13 @@ export type CompanionSceneHost = {
   /** Solo click-ack (nod) control: enable + pick the gesture. */
   setClickAck: (opts: { enabled?: boolean; gesture?: string }) => void
   getClickAck: () => { enabled: boolean; clickGesture: string } | null
+  /** Camera framing preset applied to this occupant (face / bust / full-body). */
+  setCameraPreset?: (pose?: {
+    distanceM?: number
+    heightM?: number
+    pitchRad?: number
+    fovDeg?: number
+  } | null) => void
   /**
    * Analog locomotion input for this occupant (`WASD` keys / a virtual stick).
    * `x`/`z` are strafe/forward in `[-1, 1]`, `yaw` is a turn rate in `[-1, 1]`,
@@ -245,6 +252,7 @@ export function createCompanionSceneHost(
       const opts = room.getClickAckOptions()
       return opts ? { enabled: opts.enabled, clickGesture: opts.clickGesture } : null
     },
+    setCameraPreset: (pose) => room.setCameraPreset(pose ?? null, occupantId),
     setMoveInput: (input) => {
       const handle = room.getAvatar(occupantId)
       if (!handle) return

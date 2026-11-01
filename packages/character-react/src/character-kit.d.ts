@@ -188,6 +188,11 @@ declare module '@nexus/character-kit' {
     ): Promise<{ displayText: string; ttsText: string }>
     pausePresence(reason?: string): void
     resumePresence(): void
+    /**
+     * Apply a camera framing preset (face / bust / full-body / custom). Numbers
+     * are derived by the host, so the library carries no preset table.
+     */
+    setCameraPreset(pose?: { distanceM?: number; heightM?: number; pitchRad?: number; fovDeg?: number } | null): void
     /** Hard-reset the pose: halt every clip holding weight, return to idle. */
     resetPose(reason?: string): void
     dispose(): void
@@ -382,6 +387,11 @@ declare module '@nexus/character-kit' {
     getGazeLimits(): { headYawMaxDeg: number; headPitchMaxDeg: number; eyeYawMaxDeg: number; eyePitchMaxDeg: number }
     /** Read-only gaze snapshot (head vs eye aim, limits) for live debugging. */
     getGazeDebugState(): Record<string, unknown> | null
+    /**
+     * Apply a camera framing preset (numbers are derived by the host). Frames the
+     * given occupant, or the room centre when absent; `null` resets the default.
+     */
+    setCameraPreset(pose?: { distanceM?: number; heightM?: number; pitchRad?: number; fovDeg?: number } | null, occupantId?: string | null): void
     /** Solo click-ack (nod on page click): enable + pick the gesture. */
     setClickAckOptions(opts: { enabled?: boolean; clickGesture?: string; clickSpeed?: number; clickEnabled?: boolean; zoomEnabled?: boolean; zoomInGesture?: string; zoomOutGesture?: string }): void
     getClickAckOptions(): { enabled: boolean; clickGesture: string; clickEnabled: boolean; clickSpeed: number; zoomEnabled: boolean; zoomInGesture: string; zoomOutGesture: string } | null

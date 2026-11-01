@@ -825,6 +825,42 @@ export class SceneRoom {
     return true
   }
 
+  /**
+   * Apply a camera framing preset to this room's orbit camera, framing the
+   * given occupant (or the room centre when absent). Numbers are derived by the
+   * host from `shared/companion-camera.ts`; `null` resets to the room default.
+   */
+  setCameraPreset(
+    pose?: { distanceM?: number; heightM?: number; pitchRad?: number; fovDeg?: number } | null,
+    occupantId?: string | null,
+  ): void {
+    if (this.disposed) return
+    const distance =
+      Number.isFinite(pose?.distanceM) && (pose!.distanceM as number) > 0.4
+        ? (pose!.distanceM as number)
+        : 3.6
+    const height = Number.isFinite(pose?.heightM) ? (pose!.heightM as number) : 1.55
+    const pitch = Number.isFinite(pose?.pitchRad) ? (pose!.pitchRad as number) : 0
+    const fov = Number.isFinite(pose?.fovDeg) ? (pose!.fovDeg as number) : this.camera.fov
+    const world = occupantId ? this.worldPosition(occupantId) : null
+    const x = world?.x ?? 0
+    const z = world?.z ?? 0
+    const focusY = height - distance * Math.tan(pitch)
+    this.camera.fov = THREE.MathUtils.clamp(fov, 10, 90)
+    this.camera.updateProjectionMatrix()
+    this.camera.position.set(x, height, z + distance)
+    if (this.controls) {
+      this.controls.target.set(x, focusY, z)
+      this.controls.update()
+    }
+    this.logger.info?.('[character-kit] SceneRoom camera preset applied', {
+      distance,
+      height,
+      fov,
+      occupantId: occupantId ?? null,
+    })
+  }
+
   private cameraYawXZ(): number {
     const tx = this.controls?.target.x ?? 0
     const tz = this.controls?.target.z ?? 0

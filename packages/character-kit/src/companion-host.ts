@@ -777,6 +777,20 @@ export class CompanionHost {
     return this.controller.setGazeLimits({ ...DEFAULT_GAZE_LIMITS, ...limits })
   }
 
+  /**
+   * Apply a camera framing preset (face / bust / full-body / custom). Numbers
+   * are derived by the host from `shared/companion-camera.ts`, so the library
+   * stays free of any preset table. Pass `null` to restore the default framing.
+   */
+  setCameraPreset(pose?: {
+    distanceM?: number
+    heightM?: number
+    pitchRad?: number
+    fovDeg?: number
+  } | null): void {
+    this.controller.setCameraPreset(pose ?? null)
+  }
+
   resize(): void {
     this.controller.resize()
   }
