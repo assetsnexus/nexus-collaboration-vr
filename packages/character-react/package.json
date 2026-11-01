@@ -1,6 +1,6 @@
 {
   "name": "@nexus/character-react",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React bindings for @nexus/character-kit (CompanionHost, SceneRoom, avatar studio)",
   "type": "module",
   "main": "./dist/index.js",
