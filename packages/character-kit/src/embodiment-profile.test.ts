@@ -150,7 +150,11 @@ describe("seedPresenceMoodOverrides", () => {
   });
 
   it("ignores unknown mood ids", () => {
-    assert.deepEqual(seedPresenceMoodOverrides({ grumpy: { tempo: 2 } }), []);
-    assert.equal(resolvePresenceMood("grumpy"), null);
+    // `075e688` promoted the impatience family (`grumpy`, `irritated`, ...) from
+    // "unknown" to the real `annoyed` mood, so `grumpy` no longer exercises the
+    // unknown-id path. Use a label that still belongs to no alias / catalog id
+    // (mirrors the `flabbergasted` fixture in `presence-moods.test.ts`).
+    assert.deepEqual(seedPresenceMoodOverrides({ flabbergasted: { tempo: 2 } }), []);
+    assert.equal(resolvePresenceMood("flabbergasted"), null);
   });
 });
