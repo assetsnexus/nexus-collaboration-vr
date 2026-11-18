@@ -49,3 +49,47 @@ export type { EarthworkCell, EarthworkDiff, TerrainEdit } from './earthworks.ts'
 
 export { validateClusterModel } from './validation.ts';
 export type { ValidationIssue, ValidationResult } from './validation.ts';
+
+/**
+ * Geodetic helpers, re-exported so a consumer imports one package.
+ *
+ * `ClusterGeoReference` is the model's own type; `@nexus/geo` is what turns it
+ * into projected coordinates. Keeping the re-export here means a partner app
+ * does not have to know the package split.
+ */
+export {
+  WGS84,
+  GRS80,
+  MOON,
+  MARS,
+  resolveEllipsoid,
+  geodeticToEcef,
+  ecefToGeodetic,
+  ecefToEnu,
+  enuToEcef,
+  geodeticToEnu,
+  enuToGeodetic,
+  geodesic,
+  geodesicDistance,
+  initialBearing,
+  destination,
+  createEpsgProjector,
+  geodeticToProjected,
+  projectedToGeodetic,
+  registerProjection,
+  enuToProjected,
+  projectedToEnu,
+  geodeticToLocalEnu,
+  localEnuToGeodetic,
+  localEnuToGeodeticProjected,
+} from '@nexus/geo';
+export type {
+  Ellipsoid,
+  Geodetic,
+  Ecef,
+  Enu,
+  GeodesicResult,
+  Projected,
+  Projector,
+  ProjectedPoint,
+} from '@nexus/geo';

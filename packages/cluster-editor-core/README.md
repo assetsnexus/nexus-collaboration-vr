@@ -3,10 +3,11 @@
 Framework-free GeoBIM cluster core shared by the portal, the reference app and
 partner apps.
 
-**Status: skeleton.** The IFC-shaped model, the earthworks diff and the
-validation are implemented and tested. The geodetic core (`@anx/geo`), IFC
-import/export (`web-ifc` + `@nexus/model3d-core`) and the rendering bindings
-(`cluster-editor-react`, later `cluster-editor-vue`) land next.
+**Status: model + geodetic core.** The IFC-shaped model, the earthworks diff,
+the validation and the geodetic core (`@nexus/geo`, re-exported here) are
+implemented and tested. IFC import/export (`web-ifc` + `@nexus/model3d-core`)
+and the rendering bindings (`cluster-editor-react`, later `cluster-editor-vue`)
+land next.
 
 ## Why it is framework-free
 

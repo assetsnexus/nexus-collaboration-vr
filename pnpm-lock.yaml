@@ -133,6 +133,10 @@ importers:
         version: 5.9.3
 
   packages/cluster-editor-core:
+    dependencies:
+      '@nexus/geo':
+        specifier: workspace:*
+        version: link:../geo
     devDependencies:
       typescript:
         specifier: ^5.9.2

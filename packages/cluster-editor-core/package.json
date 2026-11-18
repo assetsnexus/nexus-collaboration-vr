@@ -18,6 +18,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --experimental-strip-types --test src/model.test.ts src/earthworks.test.ts src/validation.test.ts"
   },
+  "dependencies": {
+    "@nexus/geo": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.9.2"
   }
