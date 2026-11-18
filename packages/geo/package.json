@@ -1,0 +1,27 @@
+{
+  "name": "@nexus/geo",
+  "version": "0.0.1",
+  "description": "Framework-free geodetic core: WGS84/ECEF/ENU, geodesics, EPSG projections and IfcMapConversion",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --test src/geodetic.test.ts src/geodesic.test.ts src/projection.test.ts src/geo-reference.test.ts"
+  },
+  "dependencies": {
+    "proj4": "^2.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}
