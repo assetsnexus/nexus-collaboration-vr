@@ -22,7 +22,7 @@ export type ClusterCollection =
   | 'materials'
   | 'surfaces';
 
-export type ClusterReplacedKey = 'geoReference' | 'terrain';
+export type ClusterReplacedKey = 'name' | 'geoReference' | 'terrain';
 
 export type ClusterCollectionChange = {
   added: Array<{ id: string; value: unknown }>;
@@ -92,6 +92,9 @@ export function diffClusterModel(before: ClusterModel, after: ClusterModel): Clu
   }
 
   const replaced: ClusterPatch['replaced'] = {};
+  if (before.name !== after.name) {
+    replaced.name = { before: before.name, after: after.name };
+  }
   if (!same(before.geoReference, after.geoReference)) {
     replaced.geoReference = { before: before.geoReference, after: after.geoReference };
   }
@@ -130,6 +133,9 @@ export function applyClusterPatch(model: ClusterModel, patch: ClusterPatch): Clu
     (next as Record<string, unknown>)[collection] = [...kept, ...added];
   }
 
+  if (patch.replaced?.name) {
+    next.name = patch.replaced.name.after as string;
+  }
   if (patch.replaced?.geoReference) {
     next.geoReference = patch.replaced.geoReference.after as ClusterModel['geoReference'];
   }
@@ -163,6 +169,9 @@ export function invertPatch(patch: ClusterPatch): ClusterPatch {
   }
 
   const replaced: ClusterPatch['replaced'] = {};
+  if (patch.replaced?.name) {
+    replaced.name = { before: patch.replaced.name.after, after: patch.replaced.name.before };
+  }
   if (patch.replaced?.geoReference) {
     replaced.geoReference = {
       before: patch.replaced.geoReference.after,
