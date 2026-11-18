@@ -36,6 +36,12 @@ import {
   IFCPROPERTYSINGLEVALUE,
   IFCTEXT,
   IFCRELDEFINESBYPROPERTIES,
+  IFCARBITRARYCLOSEDPROFILEDEF,
+  IFCPOLYLINE,
+  IFCEXTRUDEDAREASOLID,
+  IFCSHAPEREPRESENTATION,
+  IFCPRODUCTDEFINITIONSHAPE,
+  IFCGEOMETRICREPRESENTATIONCONTEXT,
 } from 'web-ifc';
 import type { BimKernel } from '@nexus/cluster-editor-core';
 import type {
@@ -405,9 +411,43 @@ function readPlacement(ifc: IfcAPI, modelID: number, handle: unknown): ClusterAs
   return { x, y, z };
 }
 
+/** The storey height a zone is extruded by, or a sensible default. */
+function storeyHeightFor(model: ClusterModel, storeyId: string | undefined): number {
+  if (!storeyId) return DEFAULT_ZONE_HEIGHT_M;
+  const height = model.storeys.find((storey) => storey.id === storeyId)?.height;
+  return typeof height === 'number' && Number.isFinite(height) && height > 0 ? height : DEFAULT_ZONE_HEIGHT_M;
+}
+
+/**
+ * A swept solid for a zone: its polygon extruded by the storey height.
+ *
+ * This is what a BIM tool opens and measures. The cluster round-trip still reads
+ * the polygon from `Pset_ClusterData`, so a file from another tool without the
+ * pset is the only case that needs the geometry read back.
+ */
+function buildZoneShape(
+  zone: ClusterZone,
+  depth: number,
+  context: unknown,
+  mk: (type: number, ...args: unknown[]) => unknown,
+): unknown {
+  const points = zone.points.map((point) => mk(IFCCARTESIANPOINT, [point.x, point.y]));
+  const polyline = mk(IFCPOLYLINE, [...points, points[0]]);
+  const profile = mk(IFCARBITRARYCLOSEDPROFILEDEF, 'AREA', null, polyline);
+  const origin = mk(IFCCARTESIANPOINT, [0, 0, 0]);
+  const up = mk(IFCDIRECTION, [0, 0, 1]);
+  const axis = mk(IFCAXIS2PLACEMENT3D, origin, null, up);
+  const solid = mk(IFCEXTRUDEDAREASOLID, profile, axis, up, depth);
+  const representation = mk(IFCSHAPEREPRESENTATION, context, 'Body', 'SweptSolid', [solid]);
+  return mk(IFCPRODUCTDEFINITIONSHAPE, null, null, [representation]);
+}
+
+const DEFAULT_ZONE_HEIGHT_M = 2.8;
+
 function writeModel(ifc: IfcAPI, modelID: number, model: ClusterModel): void {
   const mk = (type: number, ...args: unknown[]) => {
     const line = ifc.CreateIfcEntity(modelID, type, ...args);
+    if (!line) throw new Error(`CreateIfcEntity returned nothing for type ${type}`);
     ifc.WriteLine(modelID, line);
     return line;
   };
@@ -456,10 +496,24 @@ function writeModel(ifc: IfcAPI, modelID: number, model: ClusterModel): void {
     );
   }
 
+  const representationContext = mk(
+    IFCGEOMETRICREPRESENTATIONCONTEXT,
+    null,
+    'Model',
+    3,
+    1e-5,
+    axis,
+    null,
+  );
+
   for (const zone of model.zones) {
+    const representation =
+      zone.points.length >= 3
+        ? buildZoneShape(zone, storeyHeightFor(model, zone.storeyId), representationContext, mk)
+        : null;
     zoneHandles.set(
       zone.id,
-      mk(IFCSPACE, guid(zone.id), null, zone.name, null, null, placement, null, zone.kind, null, null),
+      mk(IFCSPACE, guid(zone.id), null, zone.name, null, null, placement, representation, zone.kind, null, null),
     );
   }
 

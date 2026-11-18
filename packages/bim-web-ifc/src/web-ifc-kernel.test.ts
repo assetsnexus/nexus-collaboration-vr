@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { IfcAPI, IFCEXTRUDEDAREASOLID } from 'web-ifc';
 import { createWebIfcKernel } from './web-ifc-kernel.ts';
 import type { ClusterModel } from '@nexus/cluster-editor-core';
 
@@ -106,6 +107,21 @@ test('a cluster model round-trips through web-ifc', async () => {
   assert.deepEqual(back.assets[0].modelRef, { modelId: 'chair-oak-v2', format: 'glb' });
   assert.deepEqual(back.assets[0].materialOverrides, { fabric: 'linen' });
   assert.equal(back.assets[0].quantity, 4);
+});
+
+test('a zone is exported as an extruded solid for BIM tools', async () => {
+  const bytes = await kernel.exportIfc(model());
+  const api = new IfcAPI();
+  await api.Init();
+  const modelID = api.OpenModel(bytes);
+  try {
+    const solids = api.GetLineIDsWithType(modelID, IFCEXTRUDEDAREASOLID);
+    assert.equal(solids.size(), 1);
+    const solid = api.GetLine(modelID, solids.get(0));
+    assert.equal(solid.Depth?.value, 2.8);
+  } finally {
+    api.CloseModel(modelID);
+  }
 });
 
 test('an empty cluster round-trips', async () => {

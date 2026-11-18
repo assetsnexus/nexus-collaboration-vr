@@ -30,7 +30,7 @@ caller changing.
 | `geoReference.anchor` | `IfcSite.RefLatitude` / `RefLongitude` / `RefElevation` |
 | buildings | `IfcBuilding` |
 | storeys | `IfcBuildingStorey` |
-| zones | `IfcSpace` (`LongName` carries the zone kind) |
+| zones | `IfcSpace` (`LongName` carries the zone kind) + an `IfcExtrudedAreaSolid` body |
 | assets | `IfcBuildingElementProxy` with `IfcLocalPlacement` |
 | materials | `IfcMaterial` |
 | surfaces | `IfcRelAssociatesMaterial` on the owning element |
@@ -44,14 +44,20 @@ the cluster round-trips exactly.
 `IfcGlobalId` is a 22-character stand-in derived from the cluster id with a hash
 suffix; the pset carries the original id, so identity survives the round-trip.
 
+## Geometry
+
+A zone is exported as a swept solid: its polygon becomes an
+`IfcArbitraryClosedProfileDef` extruded by the storey height (2.8 m when the
+storey has none), wrapped in an `IfcShapeRepresentation` on the `IfcSpace`. A BIM
+tool can open and measure it.
+
+The cluster round-trip still reads the polygon from `Pset_ClusterData`, so the
+geometry is for interoperability, not for the round-trip.
+
 ## Not exported yet
 
-- Extruded-solid geometry for zones (the polygon is in the pset, not a
-  representation).
-- Standard `IfcElementQuantity` sets (quantities are derived by the core, not
-  written into the file).
-
-Both are additive: the seam does not change when they land.
+Standard `IfcElementQuantity` sets (quantities are derived by the core, not
+written into the file). Additive: the seam does not change when they land.
 
 ## Tests
 
@@ -59,5 +65,6 @@ Both are additive: the seam does not change when they land.
 pnpm --filter @nexus/bim-web-ifc test
 ```
 
-Three tests: a valid IFC4 header, a full round-trip (buildings, storeys, zones,
-materials, surfaces, placed products with model overrides), and an empty cluster.
+Four tests: a valid IFC4 header, a full round-trip (buildings, storeys, zones,
+materials, surfaces, placed products with model overrides), the extruded zone
+solid, and an empty cluster.
