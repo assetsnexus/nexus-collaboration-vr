@@ -1,10 +1,10 @@
 /**
  * `@nexus/cluster-editor-core` — framework-free GeoBIM cluster core.
  *
- * Status: skeleton. The model, the earthworks diff and the validation are
- * implemented and tested. The geodetic core (`@anx/geo`), IFC import/export
- * (`web-ifc` + `@nexus/model3d-core`) and the rendering bindings
- * (`cluster-editor-react`, later `cluster-editor-vue`) land next.
+ * Status: model, geodetic core, materials, quantities, IFC seam, diff/undo and
+ * large-scene indexes are implemented and tested. The browser IFC adapter
+ * (`web-ifc`) and the rendering bindings (`cluster-editor-react`, later
+ * `cluster-editor-vue`) land next.
  *
  * Integration depths this package is designed for:
  *
@@ -77,6 +77,14 @@ export type { ClusterIndex, SpatialGrid } from './spatial-index.ts';
 
 export { toIfcModel, fromIfcModel } from './ifc.ts';
 export type { ClusterIfcModel, IfcEntity, IfcEntityKind } from './ifc.ts';
+
+export { diffClusterModel, applyClusterPatch, invertPatch, isPatchEmpty } from './diff.ts';
+export type {
+  ClusterCollection,
+  ClusterCollectionChange,
+  ClusterPatch,
+  ClusterReplacedKey,
+} from './diff.ts';
 
 /**
  * Geodetic helpers, re-exported so a consumer imports one package.

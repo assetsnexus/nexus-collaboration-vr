@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types --test src/model.test.ts src/earthworks.test.ts src/validation.test.ts src/materials.test.ts src/spatial-index.test.ts src/ifc.test.ts"
+    "test": "node --experimental-strip-types --test src/model.test.ts src/earthworks.test.ts src/validation.test.ts src/materials.test.ts src/spatial-index.test.ts src/ifc.test.ts src/diff.test.ts"
   },
   "dependencies": {
     "@nexus/geo": "workspace:*"

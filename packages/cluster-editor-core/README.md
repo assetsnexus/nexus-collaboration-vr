@@ -36,6 +36,7 @@ IFC-shaped: import and export are a mapping, not a translation layer.
 | Earthworks | `earthworks.ts` — current-vs-must diff (cut/fill volumes), undoable terrain edits |
 | Materials & quantities | `materials.ts` — polygon area, surface area, model/slot resolution, derived product quantities |
 | IFC seam | `ifc.ts` — `toIfcModel` / `fromIfcModel`, a pure entity graph (no WASM, no STEP) |
+| Diff & undo | `diff.ts` — `diffClusterModel` / `applyClusterPatch` / `invertPatch` |
 | Large scenes | `spatial-index.ts` — id maps plus a uniform XY grid for proximity queries |
 | Validation | `validation.ts` — pure validation with dotted paths, so a UI can point at the offending entity |
 
@@ -95,6 +96,22 @@ point" without scanning the array. The Z axis is ignored on purpose, so a sensor
 finds a camera above it; callers that need a height filter apply it to the
 result. A move that stays in the same cell needs no rebuild (`assetCell`).
 
+## Diff and undo
+
+`diffClusterModel(before, after)` returns a patch that carries the before and
+after of every changed entity, so it can be applied forward and inverted for
+undo:
+
+```ts
+const patch = diffClusterModel(before, after);
+const next = applyClusterPatch(before, patch);
+const back = applyClusterPatch(next, invertPatch(patch)); // === before
+```
+
+Collections are compared by `id`; `geoReference` and `terrain` are replaced as
+whole objects. An unchanged model produces an empty patch, so a caller can skip
+a write. `applyClusterPatch` never mutates its input.
+
 ## Not here (on purpose)
 
 - **No Three.js.** Rendering belongs to a binding.
@@ -111,6 +128,6 @@ result. A move that stays in the same cell needs no rebuild (`assetCell`).
 
 ```bash
 node --test src/model.test.ts src/earthworks.test.ts src/validation.test.ts \
-  src/materials.test.ts src/spatial-index.test.ts src/ifc.test.ts
+  src/materials.test.ts src/spatial-index.test.ts src/ifc.test.ts src/diff.test.ts
 tsc -p tsconfig.json --noEmit
 ```
