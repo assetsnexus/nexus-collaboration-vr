@@ -139,6 +139,114 @@ export type ClusterAsset = {
   /** IFC GlobalId when the asset came from an imported model. */
   ifcGlobalId?: string;
   configuration?: Record<string, unknown>;
+  /**
+   * Marketplace product this asset was placed from. The product carries the
+   * catalogue data (price, coverage, default model); the asset carries the
+   * placement. Presentation only — never telemetry.
+   */
+  productRef?: string;
+  /**
+   * Model to render for this placement. Overrides the product's own model, so a
+   * user can swap a chair for a different chair without changing the product.
+   */
+  modelRef?: ModelRef;
+  /**
+   * Per-placement material overrides, keyed by material slot id. A slot is the
+   * product's own material name (e.g. `fabric`, `frame`) or a surface id.
+   */
+  materialOverrides?: Record<string, string>;
+  /** Count of this product placed at this position (e.g. a stack of tiles). */
+  quantity?: number;
+};
+
+/**
+ * A reference to a renderable model.
+ *
+ * Kept deliberately small and format-agnostic: the model catalog owns the bytes,
+ * the cluster only records which model to show. `url` is for a model served
+ * directly; `modelId` is for one resolved through the catalog.
+ */
+export type ModelRef = {
+  /** Model asset id in the model catalog. */
+  modelId?: string;
+  /** Format hint, so a viewer can pick a loader without a HEAD request. */
+  format?: 'glb' | 'gltf' | 'vrm' | 'ifc' | 'urdf' | 'other';
+  /** Public URL, when the model is served directly. */
+  url?: string;
+};
+
+/** How a material is bought. */
+export type MaterialUnit = 'm2' | 'm' | 'piece';
+
+/**
+ * Coverage of one purchase unit, used to turn geometry into a product quantity.
+ * `perUnit` is how much one unit covers: 1 m² of tile per piece, 10 m² per litre
+ * of paint. `wasteFactor` is the extra a real job needs (0.1 = 10 %).
+ */
+export type MaterialCoverage = {
+  unit: MaterialUnit;
+  perUnit: number;
+  wasteFactor?: number;
+};
+
+/** Material kinds, mapped to `IfcMaterial` + `IfcSurfaceStyle`. */
+export type MaterialKind =
+  | 'paint'
+  | 'tile'
+  | 'wood'
+  | 'stone'
+  | 'concrete'
+  | 'metal'
+  | 'glass'
+  | 'fabric'
+  | 'other';
+
+/**
+ * A material applied to surfaces or product slots.
+ *
+ * `color` maps to `IfcColourRgb`, `textureUrl` to `IfcImageTexture`, and
+ * `productRef` to the marketplace product the material is bought as. The
+ * material is shared: many surfaces can point at one row.
+ */
+export type ClusterMaterial = {
+  id: string;
+  name: string;
+  kind: MaterialKind;
+  /** Hex colour, e.g. `#c8b89a`. */
+  color?: string;
+  /** Texture image URL. */
+  textureUrl?: string;
+  /** Marketplace product this material is bought as, when known. */
+  productRef?: string;
+  coverage?: MaterialCoverage;
+  ifcGlobalId?: string;
+};
+
+/** Which face of an element a surface is. */
+export type SurfaceKind = 'floor' | 'wall' | 'ceiling' | 'roof' | 'other';
+
+/**
+ * A named face of a zone or building, with an optional material.
+ *
+ * This is the smallest thing a user paints or tiles. It maps to
+ * `IfcRelAssociatesMaterial` on the owning element, so a painted wall survives
+ * an IFC round-trip.
+ */
+export type ClusterSurface = {
+  id: string;
+  /** Zone or building the surface belongs to. */
+  ownerId: string;
+  ownerKind: 'zone' | 'building';
+  kind: SurfaceKind;
+  /** Material applied to the surface. */
+  materialId?: string;
+  /** Area in m², when known. Computed from `points` when omitted. */
+  areaM2?: number;
+  /** Length in m, for a linear surface (skirting, pipe run). */
+  lengthM?: number;
+  /** Optional polygon for a wall face, cluster-local ENU metres. */
+  points?: Polygon;
+  ifcGlobalId?: string;
 };
 
 /** IFC4x3 alignment: a horizontal polyline with a vertical profile. */
@@ -162,6 +270,10 @@ export type ClusterModel = {
   networks: ClusterNetwork[];
   assets: ClusterAsset[];
   alignments: ClusterAlignment[];
+  /** Shared materials. Optional so an older model still validates. */
+  materials?: ClusterMaterial[];
+  /** Painted/tiled faces of zones and buildings. */
+  surfaces?: ClusterSurface[];
   /** Terrain samples, when a terrain provider is wired. */
   terrain?: ClusterTerrain;
 };

@@ -95,3 +95,87 @@ test('rejects an alignment whose stations do not increase', () => {
   assert.equal(result.ok, false);
   assert.ok(result.errors.some((issue) => issue.path === 'alignments[0].vertical'));
 });
+
+test('rejects a surface that references an unknown material', () => {
+  const model = baseModel({
+    surfaces: [{ id: 's1', ownerId: 'b1', ownerKind: 'building', kind: 'floor', materialId: 'nope' }],
+  });
+  const result = validateClusterModel(model);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.path === 'surfaces[0].materialId'));
+});
+
+test('rejects a surface that references an unknown owner', () => {
+  const model = baseModel({
+    surfaces: [{ id: 's1', ownerId: 'missing', ownerKind: 'zone', kind: 'floor' }],
+  });
+  const result = validateClusterModel(model);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.path === 'surfaces[0].ownerId'));
+});
+
+test('accepts a surface owned by a known zone', () => {
+  const model = baseModel({
+    zones: [
+      {
+        id: 'room-1',
+        name: 'Room',
+        kind: 'room',
+        points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }],
+      },
+    ],
+    surfaces: [{ id: 's1', ownerId: 'room-1', ownerKind: 'zone', kind: 'floor' }],
+  });
+  assert.equal(validateClusterModel(model).ok, true);
+});
+
+test('rejects a material with a non-hex colour', () => {
+  const model = baseModel({ materials: [{ id: 'm1', name: 'Paint', kind: 'paint', color: 'red' }] });
+  const result = validateClusterModel(model);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.path === 'materials[0].color'));
+});
+
+test('rejects a material coverage that cannot divide', () => {
+  const model = baseModel({
+    materials: [
+      { id: 'm1', name: 'Paint', kind: 'paint', coverage: { unit: 'm2', perUnit: 0 } },
+    ],
+  });
+  const result = validateClusterModel(model);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.path === 'materials[0].coverage.perUnit'));
+});
+
+test('rejects an unknown model format on a placed asset', () => {
+  const model = baseModel({
+    assets: [
+      {
+        id: 'a1',
+        name: 'Chair',
+        position: { x: 0, y: 0, z: 0 },
+        // @ts-expect-error deliberately invalid
+        modelRef: { format: 'obj' },
+      },
+    ],
+  });
+  const result = validateClusterModel(model);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.path === 'assets[0].modelRef.format'));
+});
+
+test('rejects a material override that references an unknown material', () => {
+  const model = baseModel({
+    assets: [
+      {
+        id: 'a1',
+        name: 'Chair',
+        position: { x: 0, y: 0, z: 0 },
+        materialOverrides: { fabric: 'nope' },
+      },
+    ],
+  });
+  const result = validateClusterModel(model);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.path === 'assets[0].materialOverrides.fabric'));
+});

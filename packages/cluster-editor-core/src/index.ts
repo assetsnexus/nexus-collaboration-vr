@@ -32,6 +32,13 @@ export type {
   ClusterNetworkNode,
   ClusterNetwork,
   ClusterAsset,
+  ModelRef,
+  MaterialUnit,
+  MaterialCoverage,
+  MaterialKind,
+  ClusterMaterial,
+  SurfaceKind,
+  ClusterSurface,
   ClusterAlignment,
   ClusterModel,
   ClusterTerrain,
@@ -49,6 +56,24 @@ export type { EarthworkCell, EarthworkDiff, TerrainEdit } from './earthworks.ts'
 
 export { validateClusterModel } from './validation.ts';
 export type { ValidationIssue, ValidationResult } from './validation.ts';
+
+export {
+  polygonArea,
+  surfaceArea,
+  resolvePlacedModel,
+  resolveSlotMaterial,
+  computeProductQuantities,
+} from './materials.ts';
+export type { ProductQuantity } from './materials.ts';
+
+export {
+  DEFAULT_CELL_SIZE_M,
+  buildClusterIndex,
+  queryNearby,
+  cellKey,
+  assetCell,
+} from './spatial-index.ts';
+export type { ClusterIndex, SpatialGrid } from './spatial-index.ts';
 
 /**
  * Geodetic helpers, re-exported so a consumer imports one package.

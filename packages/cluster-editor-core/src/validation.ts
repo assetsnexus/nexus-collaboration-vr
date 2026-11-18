@@ -7,6 +7,9 @@
  */
 import type { ClusterModel } from './model.ts';
 
+const HEX_COLOR = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+const MODEL_FORMATS = new Set(['glb', 'gltf', 'vrm', 'ifc', 'urdf', 'other']);
+
 export type ValidationIssue = {
   /** Dotted path, e.g. `storeys[2].elevation`. */
   path: string;
@@ -37,6 +40,8 @@ export function validateClusterModel(model: ClusterModel): ValidationResult {
 
   const buildingIds = new Set(model.buildings.map((building) => building.id));
   const storeyIds = new Set(model.storeys.map((storey) => storey.id));
+  const zoneIds = new Set(model.zones.map((zone) => zone.id));
+  const materialIds = new Set((model.materials ?? []).map((material) => material.id));
 
   model.buildings.forEach((building, index) => {
     for (const storeyId of building.storeyIds) {
@@ -99,6 +104,67 @@ export function validateClusterModel(model: ClusterModel): ValidationResult {
         path: `assets[${index}].storeyId`,
         message: `references unknown storey ${asset.storeyId}`,
       });
+    }
+    if (asset.modelRef?.format && !MODEL_FORMATS.has(asset.modelRef.format)) {
+      errors.push({
+        path: `assets[${index}].modelRef.format`,
+        message: `unknown model format ${asset.modelRef.format}`,
+      });
+    }
+    if (asset.quantity !== undefined && !(asset.quantity > 0)) {
+      errors.push({ path: `assets[${index}].quantity`, message: 'must be greater than zero' });
+    }
+    for (const [slot, materialId] of Object.entries(asset.materialOverrides ?? {})) {
+      if (!materialIds.has(materialId)) {
+        errors.push({
+          path: `assets[${index}].materialOverrides.${slot}`,
+          message: `references unknown material ${materialId}`,
+        });
+      }
+    }
+  });
+
+  model.materials?.forEach((material, index) => {
+    if (!material.id) {
+      errors.push({ path: `materials[${index}].id`, message: 'a material needs an id' });
+    }
+    if (material.color && !HEX_COLOR.test(material.color)) {
+      errors.push({ path: `materials[${index}].color`, message: 'must be a hex colour' });
+    }
+    if (material.coverage && !(material.coverage.perUnit > 0)) {
+      errors.push({
+        path: `materials[${index}].coverage.perUnit`,
+        message: 'must be greater than zero',
+      });
+    }
+    if (material.coverage && material.coverage.wasteFactor !== undefined && material.coverage.wasteFactor < 0) {
+      errors.push({
+        path: `materials[${index}].coverage.wasteFactor`,
+        message: 'must not be negative',
+      });
+    }
+  });
+
+  model.surfaces?.forEach((surface, index) => {
+    const ownerExists =
+      surface.ownerKind === 'zone' ? zoneIds.has(surface.ownerId) : buildingIds.has(surface.ownerId);
+    if (!ownerExists) {
+      errors.push({
+        path: `surfaces[${index}].ownerId`,
+        message: `references unknown ${surface.ownerKind} ${surface.ownerId}`,
+      });
+    }
+    if (surface.materialId && !materialIds.has(surface.materialId)) {
+      errors.push({
+        path: `surfaces[${index}].materialId`,
+        message: `references unknown material ${surface.materialId}`,
+      });
+    }
+    if (surface.areaM2 !== undefined && surface.areaM2 < 0) {
+      errors.push({ path: `surfaces[${index}].areaM2`, message: 'must not be negative' });
+    }
+    if (surface.lengthM !== undefined && surface.lengthM < 0) {
+      errors.push({ path: `surfaces[${index}].lengthM`, message: 'must not be negative' });
     }
   });
 
