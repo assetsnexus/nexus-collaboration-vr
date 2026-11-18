@@ -59,6 +59,19 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  packages/bim-web-ifc:
+    dependencies:
+      '@nexus/cluster-editor-core':
+        specifier: workspace:*
+        version: link:../cluster-editor-core
+      web-ifc:
+        specifier: ^0.0.69
+        version: 0.0.69
+    devDependencies:
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   packages/character-kit:
     dependencies:
       '@pixiv/three-vrm':
@@ -1248,6 +1261,9 @@ packages:
       typescript:
         optional: true
 
+  web-ifc@0.0.69:
+    resolution: {integrity: sha512-jGxHOSfGveyLN6xcMs6Z0oVimRHBTu5t+sivKOVEY3bArTGOvPtJX0L20XIjYnc3BTOfbeRElYiYZyN+tMTUVQ==}
+
   wkt-parser@1.9.0:
     resolution: {integrity: sha512-0muBykCBpbUgMPqmH+2rlvFlFwwH1kdgIMa0YbaQ/JZAlyWCv8Fa4HFSbEvZs2gYRaqJP/0D8xSI1G7Z4tn0vw==}
 
@@ -2126,6 +2142,8 @@ snapshots:
       '@vue/shared': 3.5.42
     optionalDependencies:
       typescript: 5.9.3
+
+  web-ifc@0.0.69: {}
 
   wkt-parser@1.9.0: {}
 
