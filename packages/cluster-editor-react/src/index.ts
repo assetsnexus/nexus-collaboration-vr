@@ -10,3 +10,15 @@ export type { ClusterEditor } from './useClusterEditor.ts';
 
 export { ClusterSummary } from './ClusterSummary.ts';
 export type { ClusterSummaryProps } from './ClusterSummary.ts';
+
+export {
+  DEFAULT_VIEW,
+  projectPoint,
+  buildSceneCommands,
+  drawScene,
+  pickAssetAt,
+} from './scene.ts';
+export type { DrawCommand, DrawContext, ScreenPoint, ViewTransform } from './scene.ts';
+
+export { ClusterView } from './ClusterView.ts';
+export type { ClusterViewProps } from './ClusterView.ts';

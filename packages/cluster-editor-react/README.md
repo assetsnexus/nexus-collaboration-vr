@@ -2,9 +2,9 @@
 
 React binding over `@nexus/cluster-editor-core`.
 
-**Status: state binding + summary.** The editing rules and undo/redo are
-implemented and tested; the 3D view is a later binding over the same model and
-the same reducer.
+**Status: state binding, summary and a canvas 3D view.** The editing rules and
+undo/redo are implemented and tested; the view is a real projection (yaw, pitch,
+height) rendered to a canvas, with no Three.js dependency.
 
 ## Why the logic is a reducer
 
@@ -42,6 +42,24 @@ function Editor({ initial }: { initial: ClusterModel }) {
 }
 ```
 
+## The view
+
+`ClusterView` renders the model to a `<canvas>`: zones as filled polygons,
+network segments as lines, assets as markers, with click-to-select.
+
+The projection and the draw commands are pure, so the geometry is testable
+without a canvas:
+
+```ts
+import { buildSceneCommands, projectPoint, DEFAULT_VIEW } from '@nexus/cluster-editor-react';
+
+const commands = buildSceneCommands(model, { ...DEFAULT_VIEW, yawDeg: 45 });
+```
+
+`pitchDeg` is the tilt from top-down: `0` is a plan view (height ignored), `90`
+is a side view. A host that wants WebGL can reuse `projectPoint` and
+`buildSceneCommands` with its own renderer instead of the component.
+
 ## Actions
 
 | Action | Effect |
@@ -60,5 +78,7 @@ function Editor({ initial }: { initial: ClusterModel }) {
 pnpm --filter @nexus/cluster-editor-react test
 ```
 
-16 tests: reducer behaviour (add/update/remove/paint/material/replace, undo, redo,
-history cap, no-op actions) and the summary render.
+24 tests: reducer behaviour (add/update/remove/paint/material/replace, undo, redo,
+history cap, no-op actions), the summary render, and the scene (projection at
+plan and side pitch, yaw rotation, draw-command order, picking, and a recording
+context).
