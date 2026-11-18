@@ -35,6 +35,7 @@ IFC-shaped: import and export are a mapping, not a translation layer.
 | Model | `model.ts` — `ClusterModel`, `ClusterGeoReference`, buildings/storeys/rooms, 3D networks, assets, IFC4x3 alignments, terrain, movement vectors, **materials**, **surfaces**, **placed model refs** |
 | Earthworks | `earthworks.ts` — current-vs-must diff (cut/fill volumes), undoable terrain edits |
 | Materials & quantities | `materials.ts` — polygon area, surface area, model/slot resolution, derived product quantities |
+| IFC seam | `ifc.ts` — `toIfcModel` / `fromIfcModel`, a pure entity graph (no WASM, no STEP) |
 | Large scenes | `spatial-index.ts` — id maps plus a uniform XY grid for proximity queries |
 | Validation | `validation.ts` — pure validation with dotted paths, so a UI can point at the offending entity |
 
@@ -79,6 +80,13 @@ inherits the owner's polygon (a room floor is the room area).
 The additions are additive: an older model without `materials`/`surfaces` still
 validates and renders.
 
+`toIfcModel(model)` produces that graph and `fromIfcModel(graph)` reads it back.
+The mapping is pure — no WASM, no DOM, no network — so a browser adapter
+(`web-ifc`) or a region-side `anx-bim` sidecar can turn the graph into bytes
+without reshaping the model. `ifcGlobalId` is the model id, so a round-trip
+preserves identity; unknown entity kinds are ignored rather than throwing, so a
+newer exporter still imports the parts this version understands.
+
 ## Large scenes
 
 `buildClusterIndex(model)` builds id maps and a uniform XY grid once per
@@ -103,6 +111,6 @@ result. A move that stays in the same cell needs no rebuild (`assetCell`).
 
 ```bash
 node --test src/model.test.ts src/earthworks.test.ts src/validation.test.ts \
-  src/materials.test.ts src/spatial-index.test.ts
+  src/materials.test.ts src/spatial-index.test.ts src/ifc.test.ts
 tsc -p tsconfig.json --noEmit
 ```

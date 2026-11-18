@@ -75,6 +75,9 @@ export {
 } from './spatial-index.ts';
 export type { ClusterIndex, SpatialGrid } from './spatial-index.ts';
 
+export { toIfcModel, fromIfcModel } from './ifc.ts';
+export type { ClusterIfcModel, IfcEntity, IfcEntityKind } from './ifc.ts';
+
 /**
  * Geodetic helpers, re-exported so a consumer imports one package.
  *
