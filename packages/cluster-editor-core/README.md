@@ -36,6 +36,7 @@ IFC-shaped: import and export are a mapping, not a translation layer.
 | Earthworks | `earthworks.ts` — current-vs-must diff (cut/fill volumes), undoable terrain edits |
 | Materials & quantities | `materials.ts` — polygon area, surface area, model/slot resolution, derived product quantities |
 | IFC seam | `ifc.ts` — `toIfcModel` / `fromIfcModel`, a pure entity graph (no WASM, no STEP) |
+| BIM kernel | `bim-kernel.ts` — the `BimKernel` interface, a registry, a JSON reference kernel, size-capped import |
 | Diff & undo | `diff.ts` — `diffClusterModel` / `applyClusterPatch` / `invertPatch` |
 | Large scenes | `spatial-index.ts` — id maps plus a uniform XY grid for proximity queries |
 | Validation | `validation.ts` — pure validation with dotted paths, so a UI can point at the offending entity |
@@ -88,6 +89,27 @@ without reshaping the model. `ifcGlobalId` is the model id, so a round-trip
 preserves identity; unknown entity kinds are ignored rather than throwing, so a
 newer exporter still imports the parts this version understands.
 
+### The kernel seam
+
+Turning IFC **bytes** into the model needs a parser, and the parser is the one
+part that cannot be pure. `bim-kernel.ts` defines the small interface both a
+browser adapter and a sidecar implement:
+
+```ts
+type BimKernel = {
+  name: string;
+  importIfc(bytes: Uint8Array): Promise<ClusterModel>;
+  exportIfc(model: ClusterModel): Promise<Uint8Array>;
+};
+```
+
+`createBimKernelRegistry()` lets a host swap the kernel without touching call
+sites. `importClusterFromBim` rejects an oversized payload (64 MB default)
+**before** it reaches a kernel and wraps a parse failure in a typed
+`BimKernelError`, so the UI can say "this file could not be read" instead of
+showing a stack trace. `createJsonBimKernel()` is a reference kernel over the
+entity graph — not an IFC STEP parser, but the contract in executable form.
+
 ## Large scenes
 
 `buildClusterIndex(model)` builds id maps and a uniform XY grid once per
@@ -128,6 +150,7 @@ a write. `applyClusterPatch` never mutates its input.
 
 ```bash
 node --test src/model.test.ts src/earthworks.test.ts src/validation.test.ts \
-  src/materials.test.ts src/spatial-index.test.ts src/ifc.test.ts src/diff.test.ts
+  src/materials.test.ts src/spatial-index.test.ts src/ifc.test.ts \
+  src/diff.test.ts src/bim-kernel.test.ts
 tsc -p tsconfig.json --noEmit
 ```

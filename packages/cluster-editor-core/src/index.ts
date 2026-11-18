@@ -86,6 +86,16 @@ export type {
   ClusterReplacedKey,
 } from './diff.ts';
 
+export {
+  DEFAULT_BIM_MAX_BYTES,
+  BimKernelError,
+  createBimKernelRegistry,
+  createJsonBimKernel,
+  importClusterFromBim,
+  exportClusterToBim,
+} from './bim-kernel.ts';
+export type { BimKernel, BimKernelErrorCode, BimKernelRegistry } from './bim-kernel.ts';
+
 /**
  * Geodetic helpers, re-exported so a consumer imports one package.
  *
